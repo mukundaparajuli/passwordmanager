@@ -33,13 +33,18 @@ bool CryptoManager::deriveKeyFromPIN(const String &pin, const uint8_t *salt,
   mbedtls_md_free(&ctx);
 
   if (result != 0) {
+    DEBUG_PRINTLN("Key derivation failed");
     return false;
   }
+  DEBUG_PRINTLN("Key derivation successful");
   return true;
 }
 
 void CryptoManager::generateIV(uint8_t *iv) {
-  //   Implement random IV generation here
+  for (size_t i = 0; i < AES_IV_SIZE; i++) {
+    iv[i] = (uint8_t)esp_random();
+  }
+  DEBUG_PRINTLN("IV generated");
   return;
 }
 
@@ -76,7 +81,11 @@ bool CryptoManager::decryptPassword(const uint8_t *encryptedPassword,
 
 size_t CryptoManager::addPadding(uint8_t *data, size_t dataLen,
                                  size_t blockSize) {
+
   size_t padding = AES_BLOCK_SIZE - (dataLen % AES_BLOCK_SIZE);
+  for (size_t i = 0; i < padding; i++) {
+    data[dataLen + i] = (uint8_t)padding;
+  }
   return dataLen + padding;
 }
 
