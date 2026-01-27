@@ -1,4 +1,9 @@
+
+#include "config.h"
+#include "crypto_manager.h"
 #include <Arduino.h>
+
+CryptoManager cryptoManager;
 
 // function declaration
 int myFunction(int, int);

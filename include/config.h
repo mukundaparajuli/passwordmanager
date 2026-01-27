@@ -36,7 +36,7 @@
 #define SALT_SIZE 16      // 128 bits
 
 // PBKDF2 Config (for key derivation from the pin)
-#define PBKDF2_ITERSTIONS 10000
+#define PBKDF2_ITERATIONS 10000
 
 //-------------------------------------------------------------------------------------------------------------
 //  STORAGE CONFIGURATIONS
@@ -55,5 +55,20 @@
 #define ADDR_PIN_HASH 0
 #define ADDR_PIN_SALT 32
 #define ADDR_CREDENTIALS_START 100
+
+//-------------------------------------------------------------------------------------------------------------
+//  DEBUG CONFIGURATIONS
+//-------------------------------------------------------------------------------------------------------------
+
+// Enable or disable debug prints
+#define DEBUG_MODE
+
+#ifdef DEBUG_MODE
+#define DEBUG_PRINT(x) Serial.print(x)
+#define DEBUG_PRINTLN(x) Serial.println(x)
+#else
+#define DEBUG_PRINT(x)
+#define DEBUG_PRINTLN(x)
+#endif
 
 #endif // !CONFIG_H
