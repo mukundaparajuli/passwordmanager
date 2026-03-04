@@ -2,20 +2,24 @@
 #define STORAGE_H
 
 #include <Arduino.h>
+#include "crypto.h"
 
-// Initialize the storage subsystem
+#define FIELD_SEPARATOR '\x1F'
+
+struct Credential {
+    String serviceName;
+    String serviceUrl;
+    String identifier;
+    String password;
+    String totpSecret;
+    uint8_t iv[IV_SIZE];
+};
+
 void storageInit();
-
-// Get the number of stored credentials
 int getCredentialCount();
-
-// Get a raw credential string by index (format: "service|username|password")
-String getCredentialByIndex(int index);
-
-// Parse a credential string into its components. Returns true on success.
-bool parseCredential(const String &raw, String &service, String &username, String &password);
-
-// Store a new credential
-void storeCredential(const String &service, const String &username, const String &password);
+bool storeCredential(const Credential &cred, const uint8_t *encKey);
+bool getCredential(int index, Credential &cred, const uint8_t *encKey);
+bool updateCredential(int index, const Credential &cred, const uint8_t *encKey);
+bool deleteCredential(int index, const uint8_t *encKey);
 
 #endif
