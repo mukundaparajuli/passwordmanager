@@ -5,6 +5,5 @@
 
 void inputInit();
 void readButtons(bool &upPressed, bool &downPressed);
-bool handleSerialInput();
 
 #endif

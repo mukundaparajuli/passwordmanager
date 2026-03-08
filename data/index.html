@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>VaultKey</title>
+    <style>
+      :root {
+        --bg: #0b1220;
+        --panel: #101a33;
+        --muted: #8aa0c6;
+        --text: #e8f0ff;
+        --accent: #5aa7ff;
+        --danger: #ff5a7a;
+        --ok: #2ee59d;
+        --border: #203155;
+      }
+      * {
+        box-sizing: border-box;
+        font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      }
+      body {
+        margin: 0;
+        background: radial-gradient(1200px 800px at 20% -10%, rgba(90, 167, 255, 0.25), transparent 60%),
+          radial-gradient(900px 700px at 100% 0%, rgba(46, 229, 157, 0.15), transparent 55%),
+          var(--bg);
+        color: var(--text);
+      }
+      header {
+        position: sticky;
+        top: 0;
+        backdrop-filter: blur(10px);
+        background: rgba(11, 18, 32, 0.7);
+        border-bottom: 1px solid var(--border);
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      header .brand {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+      }
+      header h1 {
+        margin: 0;
+        font-size: 18px;
+        letter-spacing: 0.2px;
+      }
+      header .status {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      header .status strong {
+        color: var(--text);
+      }
+      main {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 16px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 16px;
+      }
+      @media (max-width: 920px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+      .card {
+        background: linear-gradient(180deg, rgba(16, 26, 51, 0.9), rgba(16, 26, 51, 0.65));
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 14px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+      }
+      .card h2 {
+        margin: 0 0 10px 0;
+        font-size: 14px;
+        color: var(--muted);
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        text-transform: uppercase;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin: 8px 0 6px;
+      }
+      input,
+      button,
+      textarea {
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        background: rgba(10, 16, 30, 0.7);
+        color: var(--text);
+        padding: 10px 12px;
+        font-size: 14px;
+        outline: none;
+      }
+      input:focus,
+      textarea:focus {
+        border-color: rgba(90, 167, 255, 0.65);
+        box-shadow: 0 0 0 4px rgba(90, 167, 255, 0.12);
+      }
+      button {
+        cursor: pointer;
+        background: linear-gradient(180deg, rgba(90, 167, 255, 0.95), rgba(45, 123, 235, 0.95));
+        border: 1px solid rgba(90, 167, 255, 0.65);
+        font-weight: 600;
+      }
+      button.secondary {
+        background: rgba(10, 16, 30, 0.7);
+        border: 1px solid var(--border);
+        color: var(--muted);
+      }
+      button.danger {
+        background: linear-gradient(180deg, rgba(255, 90, 122, 0.95), rgba(210, 55, 92, 0.95));
+        border-color: rgba(255, 90, 122, 0.6);
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+        margin-top: 8px;
+      }
+      .error {
+        margin-top: 10px;
+        padding: 10px 12px;
+        background: rgba(255, 90, 122, 0.12);
+        border: 1px solid rgba(255, 90, 122, 0.35);
+        border-radius: 10px;
+        color: #ffd6df;
+        font-size: 13px;
+      }
+      .ok {
+        margin-top: 10px;
+        padding: 10px 12px;
+        background: rgba(46, 229, 157, 0.12);
+        border: 1px solid rgba(46, 229, 157, 0.35);
+        border-radius: 10px;
+        color: #d8ffee;
+        font-size: 13px;
+      }
+      .list {
+        margin-top: 10px;
+        border-top: 1px solid var(--border);
+      }
+      .item {
+        padding: 10px 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid rgba(32, 49, 85, 0.75);
+        cursor: pointer;
+      }
+      .item:hover {
+        background: rgba(90, 167, 255, 0.06);
+      }
+      .item.selected {
+        background: rgba(90, 167, 255, 0.12);
+        border-left: 3px solid rgba(90, 167, 255, 0.85);
+        padding-left: 7px;
+      }
+      .item .svc {
+        font-weight: 650;
+        font-size: 14px;
+      }
+      .item .url {
+        font-size: 12px;
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 520px;
+      }
+      .chip {
+        font-size: 11px;
+        color: rgba(232, 240, 255, 0.9);
+        background: rgba(46, 229, 157, 0.12);
+        border: 1px solid rgba(46, 229, 157, 0.3);
+        border-radius: 999px;
+        padding: 4px 8px;
+        white-space: nowrap;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+        font-size: 13px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 8px 8px;
+        border-bottom: 1px solid rgba(32, 49, 85, 0.75);
+        vertical-align: top;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.2px;
+      }
+      .right {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        justify-content: flex-end;
+      }
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <h1>VaultKey</h1>
+        <div class="status">Status: <strong id="statusText">Locked</strong></div>
+      </div>
+      <div class="right">
+        <button class="secondary" id="btnRefresh" title="Refresh list">Refresh</button>
+        <button class="danger" id="btnLock" title="Lock vault">Lock</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="grid">
+        <section class="card" id="cardUnlock">
+          <h2>Unlock</h2>
+          <div class="row">
+            <div style="flex: 1; min-width: 220px">
+              <label for="pin">PIN</label>
+              <input id="pin" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="Enter PIN" />
+            </div>
+            <div style="flex: 1; min-width: 220px" id="pinConfirmWrap">
+              <label for="pinConfirm">Confirm PIN (first-time setup)</label>
+              <input
+                id="pinConfirm"
+                inputmode="numeric"
+                autocomplete="one-time-code"
+                maxlength="12"
+                placeholder="Confirm PIN"
+              />
+            </div>
+          </div>
+          <div class="row" style="margin-top: 12px">
+            <button id="btnUnlock">Unlock</button>
+          </div>
+          <div class="hint">
+            - The session token is stored in your browser session only.<br />
+            - The device auto-locks after 60 seconds of inactivity.
+          </div>
+          <div id="unlockMsg"></div>
+        </section>
+
+        <section class="card" id="cardAdd">
+          <h2>Add Credential</h2>
+          <label for="svc">Service</label>
+          <input id="svc" maxlength="31" placeholder="e.g., GitHub" />
+          <label for="url">URL</label>
+          <input id="url" maxlength="63" placeholder="e.g., https://github.com" />
+          <label for="user">Username</label>
+          <input id="user" maxlength="31" placeholder="e.g., alice@example.com" />
+          <label for="pwd">Password</label>
+          <input id="pwd" type="password" maxlength="63" placeholder="Password" />
+          <label for="totp">TOTP Secret (optional)</label>
+          <input id="totp" maxlength="31" placeholder="Base32 secret (optional)" />
+          <div class="row" style="margin-top: 12px">
+            <button id="btnAdd">Add</button>
+          </div>
+          <div id="addMsg"></div>
+        </section>
+
+        <section class="card" id="cardList" style="grid-column: 1 / -1">
+          <h2>Credentials</h2>
+          <div class="row">
+            <input id="search" style="flex: 1; min-width: 240px" placeholder="Search (service / URL)" />
+            <span class="hint" id="countText"></span>
+          </div>
+          <div class="list" id="list"></div>
+          <div id="listMsg"></div>
+        </section>
+
+        <section class="card" id="cardImport" style="grid-column: 1 / -1">
+          <h2>CSV Import</h2>
+          <div class="row">
+            <input id="csvFile" type="file" accept=".csv,text/csv" />
+            <button class="secondary" id="btnClearImport">Clear</button>
+            <button id="btnImport" disabled>Import Selected</button>
+          </div>
+          <div class="hint">Expected headers: name/service, url, username, password, totp (optional).</div>
+          <div id="importPreview"></div>
+          <div id="importMsg"></div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const API = {
+        unlock: "/api/unlock",
+        lock: "/api/lock",
+        credentials: "/api/credentials",
+        import: "/api/credentials/import",
+        selectPrefix: "/api/select/",
+        deletePrefix: "/api/credentials/",
+      };
+
+      const els = {
+        statusText: document.getElementById("statusText"),
+        btnRefresh: document.getElementById("btnRefresh"),
+        btnLock: document.getElementById("btnLock"),
+        pin: document.getElementById("pin"),
+        pinConfirmWrap: document.getElementById("pinConfirmWrap"),
+        pinConfirm: document.getElementById("pinConfirm"),
+        btnUnlock: document.getElementById("btnUnlock"),
+        unlockMsg: document.getElementById("unlockMsg"),
+        svc: document.getElementById("svc"),
+        url: document.getElementById("url"),
+        user: document.getElementById("user"),
+        pwd: document.getElementById("pwd"),
+        totp: document.getElementById("totp"),
+        btnAdd: document.getElementById("btnAdd"),
+        addMsg: document.getElementById("addMsg"),
+        search: document.getElementById("search"),
+        countText: document.getElementById("countText"),
+        list: document.getElementById("list"),
+        listMsg: document.getElementById("listMsg"),
+        csvFile: document.getElementById("csvFile"),
+        btnImport: document.getElementById("btnImport"),
+        btnClearImport: document.getElementById("btnClearImport"),
+        importPreview: document.getElementById("importPreview"),
+        importMsg: document.getElementById("importMsg"),
+      };
+
+      let sessionToken = sessionStorage.getItem("vaultkey_token") || "";
+      let credentials = [];
+      let selectedId = -1;
+      let idleTimer = null;
+
+      function setMsg(el, html) {
+        el.innerHTML = html || "";
+      }
+
+      function showError(el, text) {
+        setMsg(el, `<div class="error">${escapeHtml(text)}</div>`);
+      }
+
+      function showOk(el, text) {
+        setMsg(el, `<div class="ok">${escapeHtml(text)}</div>`);
+      }
+
+      function escapeHtml(s) {
+        return (s || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function setLockedUI(locked) {
+        els.statusText.textContent = locked ? "Locked" : "Unlocked";
+        document.getElementById("cardUnlock").classList.toggle("hidden", !locked);
+        document.getElementById("cardAdd").classList.toggle("hidden", locked);
+        document.getElementById("cardList").classList.toggle("hidden", locked);
+        document.getElementById("cardImport").classList.toggle("hidden", locked);
+        els.btnLock.disabled = locked;
+        els.btnRefresh.disabled = locked;
+      }
+
+      function lockClient() {
+        sessionToken = "";
+        sessionStorage.removeItem("vaultkey_token");
+        credentials = [];
+        selectedId = -1;
+        renderList();
+        setLockedUI(true);
+        showOk(els.unlockMsg, "Session locked.");
+      }
+
+      async function lockAll() {
+        try {
+          if (sessionToken) {
+            await fetch(API.lock, { method: "POST", headers: authHeaders() });
+          }
+        } catch {
+          /* ignore */
+        }
+        lockClient();
+      }
+
+      function resetIdleTimer() {
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          lockClient();
+        }, 60_000);
+      }
+
+      function authHeaders() {
+        const headers = { "content-type": "application/json" };
+        if (sessionToken) headers["X-Session-Token"] = sessionToken;
+        return headers;
+      }
+
+      async function apiFetch(url, opts = {}) {
+        resetIdleTimer();
+        const res = await fetch(url, opts);
+        if (res.status === 401) {
+          lockClient();
+          throw new Error("Unauthorized (locked)");
+        }
+        return res;
+      }
+
+      async function doUnlock() {
+        setMsg(els.unlockMsg, "");
+        const pin = els.pin.value.trim();
+        const pinConfirm = els.pinConfirm.value.trim();
+        if (!pin) return showError(els.unlockMsg, "Enter a PIN.");
+
+        const body = { pin };
+        if (pinConfirm) body.pin_confirm = pinConfirm;
+
+        const res = await fetch(API.unlock, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        let data = null;
+        try {
+          data = await res.json();
+        } catch {
+          /* ignore */
+        }
+
+        if (!res.ok) {
+          const msg = (data && data.error) || `Unlock failed (${res.status})`;
+          showError(els.unlockMsg, msg);
+          return;
+        }
+
+        sessionToken = data.token || "";
+        if (!sessionToken) {
+          showError(els.unlockMsg, "No token returned.");
+          return;
+        }
+
+        sessionStorage.setItem("vaultkey_token", sessionToken);
+        setLockedUI(false);
+        showOk(els.unlockMsg, "Unlocked.");
+        await refreshList();
+      }
+
+      function renderList() {
+        const q = els.search.value.trim().toLowerCase();
+        const rows = (credentials || []).filter((c) => {
+          if (!q) return true;
+          return (c.service || "").toLowerCase().includes(q) || (c.url || "").toLowerCase().includes(q);
+        });
+
+        els.countText.textContent = `${rows.length}/${(credentials || []).length} shown`;
+        els.list.innerHTML = "";
+
+        if (rows.length === 0) {
+          els.list.innerHTML = `<div class="hint" style="padding: 10px 0">No matches.</div>`;
+          return;
+        }
+
+        for (const c of rows) {
+          const div = document.createElement("div");
+          div.className = "item" + (c.id === selectedId ? " selected" : "");
+          div.addEventListener("click", () => selectCredential(c.id));
+          div.innerHTML = `
+            <div style="min-width: 0">
+              <div class="svc">${escapeHtml(c.service || "(unnamed)")}</div>
+              <div class="url">${escapeHtml(c.url || "")}</div>
+            </div>
+            <div class="right">
+              ${c.has_totp ? '<span class="chip">TOTP</span>' : ""}
+            </div>
+          `;
+          els.list.appendChild(div);
+        }
+      }
+
+      async function refreshList() {
+        setMsg(els.listMsg, "");
+        const res = await apiFetch(API.credentials, { headers: authHeaders() });
+        const data = await res.json();
+        credentials = data.credentials || [];
+        credentials.sort((a, b) => (a.service || "").localeCompare(b.service || ""));
+        renderList();
+      }
+
+      async function selectCredential(id) {
+        setMsg(els.listMsg, "");
+        selectedId = id;
+        renderList();
+        try {
+          await apiFetch(API.selectPrefix + encodeURIComponent(String(id)), { method: "POST", headers: authHeaders() });
+        } catch (e) {
+          showError(els.listMsg, String(e.message || e));
+        }
+      }
+
+      async function addCredential() {
+        setMsg(els.addMsg, "");
+
+        const payload = {
+          service: els.svc.value.trim(),
+          url: els.url.value.trim(),
+          username: els.user.value.trim(),
+          password: els.pwd.value,
+          totp_secret: els.totp.value.trim(),
+        };
+
+        if (!payload.service) return showError(els.addMsg, "Service is required.");
+        if (!payload.password) return showError(els.addMsg, "Password is required.");
+
+        const res = await apiFetch(API.credentials, {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        showOk(els.addMsg, `Added (id: ${data.id}).`);
+        els.pwd.value = "";
+        await refreshList();
+      }
+
+      function parseCSV(text) {
+        const rows = [];
+        let i = 0;
+        let cur = "";
+        let row = [];
+        let inQuotes = false;
+
+        function pushCell() {
+          row.push(cur);
+          cur = "";
+        }
+
+        function pushRow() {
+          // skip empty trailing rows
+          if (row.length === 1 && row[0].trim() === "") {
+            row = [];
+            return;
+          }
+          rows.push(row);
+          row = [];
+        }
+
+        while (i < text.length) {
+          const ch = text[i];
+          if (inQuotes) {
+            if (ch === '"') {
+              if (text[i + 1] === '"') {
+                cur += '"';
+                i += 2;
+                continue;
+              }
+              inQuotes = false;
+              i++;
+              continue;
+            }
+            cur += ch;
+            i++;
+            continue;
+          }
+
+          if (ch === '"') {
+            inQuotes = true;
+            i++;
+            continue;
+          }
+
+          if (ch === ",") {
+            pushCell();
+            i++;
+            continue;
+          }
+
+          if (ch === "\n") {
+            pushCell();
+            pushRow();
+            i++;
+            continue;
+          }
+
+          if (ch === "\r") {
+            i++;
+            continue;
+          }
+
+          cur += ch;
+          i++;
+        }
+
+        pushCell();
+        pushRow();
+        return rows;
+      }
+
+      function pickHeaderIndex(headers, variants) {
+        for (let i = 0; i < headers.length; i++) {
+          const h = headers[i];
+          for (const v of variants) {
+            if (h === v) return i;
+          }
+        }
+        return -1;
+      }
+
+      let importRows = [];
+
+      function renderImportPreview() {
+        if (!importRows.length) {
+          els.importPreview.innerHTML = "";
+          els.btnImport.disabled = true;
+          return;
+        }
+
+        els.btnImport.disabled = false;
+        const max = Math.min(importRows.length, 50);
+
+        let html = `<table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Service</th>
+              <th>URL</th>
+              <th>Username</th>
+            </tr>
+          </thead>
+          <tbody>`;
+
+        for (let i = 0; i < max; i++) {
+          const r = importRows[i];
+          html += `<tr>
+              <td><input type="checkbox" data-i="${i}" ${r._selected ? "checked" : ""} /></td>
+              <td>${escapeHtml(r.service)}</td>
+              <td>${escapeHtml(r.url)}</td>
+              <td>${escapeHtml(r.username)}</td>
+            </tr>`;
+        }
+
+        html += `</tbody></table>`;
+        els.importPreview.innerHTML = html;
+        els.importPreview.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+          cb.addEventListener("change", (e) => {
+            const idx = Number(e.target.getAttribute("data-i"));
+            importRows[idx]._selected = !!e.target.checked;
+          });
+        });
+      }
+
+      async function handleCsvFile(file) {
+        setMsg(els.importMsg, "");
+        if (!file) return;
+
+        const text = await file.text();
+        const rows = parseCSV(text);
+        if (rows.length < 2) return showError(els.importMsg, "CSV has no data rows.");
+
+        const headers = rows[0].map((h) => String(h || "").trim().toLowerCase());
+        const iService = pickHeaderIndex(headers, ["name", "service", "title"]);
+        const iUrl = pickHeaderIndex(headers, ["url", "website", "domain"]);
+        const iUser = pickHeaderIndex(headers, ["username", "user", "login"]);
+        const iPwd = pickHeaderIndex(headers, ["password", "pass"]);
+        const iTotp = pickHeaderIndex(headers, ["totp", "otp", "secret", "totp_secret"]);
+
+        if (iService === -1 || iPwd === -1) {
+          return showError(els.importMsg, "Missing required columns (service/name and password).");
+        }
+
+        importRows = [];
+        for (let r = 1; r < rows.length; r++) {
+          const cols = rows[r];
+          const service = String(cols[iService] || "").trim();
+          const password = String(cols[iPwd] || "");
+          if (!service || !password) continue;
+          importRows.push({
+            service,
+            url: iUrl !== -1 ? String(cols[iUrl] || "").trim() : "",
+            username: iUser !== -1 ? String(cols[iUser] || "").trim() : "",
+            password,
+            totp_secret: iTotp !== -1 ? String(cols[iTotp] || "").trim() : "",
+            _selected: true,
+          });
+        }
+
+        if (!importRows.length) return showError(els.importMsg, "No importable rows found.");
+        showOk(els.importMsg, `Parsed ${importRows.length} rows. Review and import.`);
+        renderImportPreview();
+      }
+
+      async function importSelected() {
+        setMsg(els.importMsg, "");
+        const selected = importRows.filter((r) => r._selected);
+        if (!selected.length) return showError(els.importMsg, "No rows selected.");
+
+        const payload = selected.map((r) => ({
+          service: r.service,
+          url: r.url,
+          username: r.username,
+          password: r.password,
+          totp_secret: r.totp_secret,
+        }));
+
+        const res = await apiFetch(API.import, {
+          method: "POST",
+          headers: authHeaders(),
+          body: JSON.stringify({ credentials: payload }),
+        });
+        const data = await res.json();
+        showOk(els.importMsg, `Imported ${data.imported} credential(s).`);
+        importRows = [];
+        renderImportPreview();
+        await refreshList();
+      }
+
+      // Wire up events
+      els.btnUnlock.addEventListener("click", doUnlock);
+      els.pin.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") doUnlock();
+      });
+      els.pinConfirm.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") doUnlock();
+      });
+      els.btnRefresh.addEventListener("click", refreshList);
+      els.btnLock.addEventListener("click", lockAll);
+      els.btnAdd.addEventListener("click", addCredential);
+      els.search.addEventListener("input", renderList);
+      els.csvFile.addEventListener("change", (e) => handleCsvFile(e.target.files && e.target.files[0]));
+      els.btnImport.addEventListener("click", importSelected);
+      els.btnClearImport.addEventListener("click", () => {
+        importRows = [];
+        els.csvFile.value = "";
+        renderImportPreview();
+        setMsg(els.importMsg, "");
+      });
+
+      ["mousemove", "mousedown", "keydown", "touchstart"].forEach((evt) => {
+        window.addEventListener(evt, () => resetIdleTimer(), { passive: true });
+      });
+
+      async function bootstrap() {
+        resetIdleTimer();
+        setLockedUI(!sessionToken);
+        els.pinConfirmWrap.classList.remove("hidden"); // server decides if confirm is required
+
+        if (sessionToken) {
+          try {
+            setLockedUI(false);
+            await refreshList();
+          } catch {
+            /* lockClient already handled */
+          }
+        }
+      }
+
+      bootstrap();
+    </script>
+  </body>
+</html>

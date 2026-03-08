@@ -1,13 +1,11 @@
 #include <Arduino.h>
 
 #include "auth.h"
+#include "device_state.h"
 #include "input.h"
 #include "storage.h"
 #include "ui.h"
-
-static int selectedIndex = 0;
-static int credentialCount = 0;
-static bool showingDetail = false;
+#include "web.h"
 
 static int upPressCount = 0;
 static int downPressCount = 0;
@@ -15,60 +13,16 @@ static unsigned long upLastPressTime = 0;
 static unsigned long downLastPressTime = 0;
 static const unsigned long DOUBLE_CLICK_WINDOW = 400;
 
-static void authenticateUser() {
-    if (!isPinConfigured()) {
-        uiShowPinSetup();
-        Serial.println("\n[AUTH] No PIN configured. Please set a 4-digit PIN.");
-
-        while (true) {
-            String pin1 = readPinFromSerial();
-            Serial.print("Confirm PIN: ");
-            String pin2 = readPinFromSerial();
-
-            if (pin1 != pin2) {
-                Serial.println("[AUTH] PINs do not match. Try again.");
-                uiShowPinFail();
-                delay(1500);
-                uiShowPinSetup();
-                continue;
-            }
-
-            if (setupPin(pin1)) {
-                uiShowPinCreated();
-                delay(1500);
-                break;
-            }
-        }
-    }
-
-    uiShowPinEntry();
-    Serial.println("\n[AUTH] Device locked. Enter your 4-digit PIN.");
-
-    while (true) {
-        String pin = readPinFromSerial();
-
-        if (verifyPin(pin)) {
-            uiShowPinOk();
-            Serial.println("[AUTH] PIN accepted.");
-            delay(1000);
-            return;
-        }
-
-        Serial.println("[AUTH] Wrong PIN. Try again.");
-        uiShowPinFail();
-        delay(1500);
-        uiShowPinEntry();
-    }
-}
-
 void setup() {
     Serial.begin(115200);
     delay(1000);
 
-    Serial.println("\n\n=== Shield Key Booting ===");
+    Serial.println("\n\n=== VaultKey Booting ===");
 
+    authInit();
     storageInit();
     inputInit();
+    deviceStateInit();
 
     if (!uiInit()) {
         while (true) delay(1000);
@@ -77,30 +31,78 @@ void setup() {
     uiShowBootScreen();
     delay(1000);
 
-    authenticateUser();
+    webInit();
 
-    Serial.println("Commands:");
-    Serial.println("  ADD | service | url | identifier | password");
-    Serial.println("  ADD | service | url | identifier | password | totpSecret");
-    Serial.println("  TOTP | index | totpSecret");
-    Serial.println("  EDITPWD | index | newPassword");
+    if (!isPinConfigured())
+        uiShowPinSetup();
+    else
+        uiShowPinEntry();
 }
 
 void loop() {
-    handleSerialInput();
+    authLoop();
 
-    bool upPressed, downPressed;
-    readButtons(upPressed, downPressed);
+    static bool lastAuth = false;
+    static int lastRenderedIndex = -1;
+    static int lastRenderedCount = -1;
+    static bool lastRenderedDetail = false;
+    static unsigned long lastRenderMs = 0;
+    static unsigned long lastCountPollMs = 0;
+    static int cachedCount = 0;
 
-    credentialCount = getCredentialCount();
+    bool authed = isAuthenticated();
+    if (authed != lastAuth) {
+        if (authed) {
+            uiShowPinOk();
+            delay(800);
+        } else {
+            if (!isPinConfigured())
+                uiShowPinSetup();
+            else
+                uiShowPinEntry();
+        }
+        lastAuth = authed;
+        lastRenderedIndex = -1;
+        lastRenderedCount = -1;
+        lastRenderedDetail = false;
+        lastRenderMs = 0;
+        lastCountPollMs = 0;
+        cachedCount = 0;
+    }
 
-    if (credentialCount == 0) {
-        uiShowNoCredentials();
+    if (!authed) {
         delay(200);
         return;
     }
 
+    bool upPressed, downPressed;
+    readButtons(upPressed, downPressed);
+
+    const unsigned long now = millis();
+    if (lastCountPollMs == 0 || (unsigned long)(now - lastCountPollMs) > 500) {
+        cachedCount = getCredentialCount();
+        lastCountPollMs = now;
+    }
+    int credentialCount = cachedCount;
+
+    if (credentialCount == 0) {
+        if (lastRenderedCount != 0 || lastRenderMs == 0 || (unsigned long)(now - lastRenderMs) > 1000) {
+            uiShowNoCredentials();
+            lastRenderedIndex = 0;
+            lastRenderedDetail = false;
+            lastRenderedCount = 0;
+            lastRenderMs = millis();
+        }
+        delay(200);
+        return;
+    }
+
+    deviceClampSelectedIndex(credentialCount);
+    int selectedIndex = deviceGetSelectedIndex();
+    bool showingDetail = deviceIsShowingDetail();
+
     if (upPressed) {
+        authRecordActivity();
         unsigned long now = millis();
         if (now - upLastPressTime > DOUBLE_CLICK_WINDOW)
             upPressCount = 0;
@@ -110,7 +112,12 @@ void loop() {
 
         if (upPressCount == 2) {
             showingDetail = true;
-            uiShowCredentialDetail(selectedIndex);
+            deviceSetShowingDetail(true);
+            uiShowCredentialDetail(deviceGetSelectedIndex());
+            lastRenderedIndex = deviceGetSelectedIndex();
+            lastRenderedDetail = true;
+            lastRenderedCount = credentialCount;
+            lastRenderMs = millis();
             upPressCount = 0;
             delay(250);
             return;
@@ -120,11 +127,13 @@ void loop() {
             selectedIndex--;
             if (selectedIndex < 0)
                 selectedIndex = credentialCount - 1;
+            deviceSetSelectedIndex(selectedIndex);
         }
         delay(120);
     }
 
     if (downPressed) {
+        authRecordActivity();
         unsigned long now = millis();
         if (now - downLastPressTime > DOUBLE_CLICK_WINDOW)
             downPressCount = 0;
@@ -134,6 +143,7 @@ void loop() {
 
         if (downPressCount == 2) {
             showingDetail = false;
+            deviceSetShowingDetail(false);
             downPressCount = 0;
             delay(250);
             return;
@@ -143,12 +153,28 @@ void loop() {
             selectedIndex++;
             if (selectedIndex >= credentialCount)
                 selectedIndex = 0;
+            deviceSetSelectedIndex(selectedIndex);
         }
         delay(120);
     }
 
-    if (showingDetail)
-        uiShowCredentialDetail(selectedIndex);
-    else
-        uiShowCredentialList(selectedIndex, credentialCount);
+    selectedIndex = deviceGetSelectedIndex();
+    showingDetail = deviceIsShowingDetail();
+
+    const bool shouldRender = (selectedIndex != lastRenderedIndex) ||
+                              (showingDetail != lastRenderedDetail) ||
+                              (credentialCount != lastRenderedCount) ||
+                              (lastRenderMs == 0) ||
+                              ((unsigned long)(millis() - lastRenderMs) > 1000);
+
+    if (shouldRender) {
+        if (showingDetail) uiShowCredentialDetail(selectedIndex);
+        else uiShowCredentialList(selectedIndex, credentialCount);
+        lastRenderedIndex = selectedIndex;
+        lastRenderedDetail = showingDetail;
+        lastRenderedCount = credentialCount;
+        lastRenderMs = millis();
+    }
+
+    delay(30);
 }

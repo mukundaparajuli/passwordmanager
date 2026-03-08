@@ -28,7 +28,7 @@ bool uiInit() {
 void uiShowBootScreen() {
     display.clearDisplay();
     display.setCursor(0, 0);
-    display.println("Shield Key Ready");
+    display.println("VaultKey Ready");
     display.display();
 }
 
@@ -57,7 +57,7 @@ void uiShowCredentialList(int selectedIndex, int credentialCount) {
         int credIndex = startIndex + i;
         if (credIndex >= credentialCount) break;
 
-        Credential cred;
+        credential_entry_t cred;
         if (!getCredential(credIndex, cred, key)) continue;
 
         if (credIndex == selectedIndex)
@@ -65,7 +65,8 @@ void uiShowCredentialList(int selectedIndex, int credentialCount) {
         else
             display.print("   ");
 
-        display.println(cred.serviceName);
+        display.println(strlen(cred.service) ? cred.service : "(unnamed)");
+        memset(&cred, 0, sizeof(cred));
     }
 
     display.display();
@@ -75,16 +76,18 @@ void uiShowCredentialDetail(int index) {
     const uint8_t *key = getEncryptionKey();
     if (!key) return;
 
-    Credential cred;
+    credential_entry_t cred;
     if (!getCredential(index, cred, key)) return;
 
     // Mask a string: show first char then asterisks, or all asterisks if short
-    auto mask = [](const String &s) -> String {
-        if (s.length() == 0) return "****";
-        if (s.length() <= 2) return String("****");
+    auto mask = [](const char *s) -> String {
+        size_t n = strlen(s);
+        if (n == 0) return "****";
+        if (n <= 2) return String("****");
         String masked;
+        masked.reserve(n);
         masked += s[0];
-        for (unsigned int i = 1; i < s.length(); i++) masked += '*';
+        for (size_t i = 1; i < n; i++) masked += '*';
         return masked;
     };
 
@@ -92,25 +95,26 @@ void uiShowCredentialDetail(int index) {
     display.setCursor(0, 0);
 
     display.print("Svc: ");
-    display.println(cred.serviceName);
+    display.println(strlen(cred.service) ? cred.service : "(unnamed)");
 
-    if (cred.serviceUrl.length() > 0) {
+    if (strlen(cred.url) > 0) {
         display.print("URL: ");
-        display.println(cred.serviceUrl);
+        display.println(cred.url);
     }
 
     display.print("ID:  ");
-    display.println(cred.identifier);
+    display.println(strlen(cred.username) ? cred.username : "-");
 
     display.print("Pwd: ");
     display.println(mask(cred.password));
 
-    if (cred.totpSecret.length() > 0) {
+    if (strlen(cred.totp_secret) > 0) {
         display.print("TOTP: ");
         display.println("******");
     }
 
     display.display();
+    memset(&cred, 0, sizeof(cred));
 }
 
 void uiShowPinSetup() {
@@ -118,8 +122,8 @@ void uiShowPinSetup() {
     display.setCursor(0, 10);
     display.println("No PIN set.");
     display.println();
-    display.println("Enter 4-digit PIN");
-    display.println("via Serial Monitor");
+    display.println("Open web UI to");
+    display.println("set a PIN");
     display.display();
 }
 
@@ -128,8 +132,7 @@ void uiShowPinEntry() {
     display.setCursor(0, 10);
     display.println("Device Locked");
     display.println();
-    display.println("Enter PIN via");
-    display.println("Serial Monitor");
+    display.println("Unlock in web UI");
     display.display();
 }
 

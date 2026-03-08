@@ -14,4 +14,9 @@
 #define BTN_UP_OK 4
 #define BTN_DOWN_BACK 5
 
+// WiFi AP mode (change these to suit your device)
+#define WIFI_AP_SSID "VaultKey"
+// WPA2 password must be 8+ chars; leave empty string for an open AP.
+#define WIFI_AP_PASSWORD "vaultkey123"
+
 #endif
