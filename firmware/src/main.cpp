@@ -1,24 +1,20 @@
 #include <Arduino.h>
 #include <string.h>
 
-// =============================================================================
-// TODO [ESP32-S2/S3]: Uncomment USB HID block below when migrating to
-//   ESP32-S2 or ESP32-S3, which have native USB HID support via TinyUSB.
-//   The current target (ESP32 DevKit V1) does NOT support USB HID.
-// =============================================================================
+#if defined(VAULTKEY_ENABLE_USB_HID) && VAULTKEY_ENABLE_USB_HID
+#if defined(__INTELLISENSE__) || defined(__clang__)
+#ifndef CONFIG_TINYUSB_ENABLED
+#define CONFIG_TINYUSB_ENABLED 1
+#endif
+#ifndef CONFIG_TINYUSB_HID_ENABLED
+#define CONFIG_TINYUSB_HID_ENABLED 1
+#endif
+#endif
 
-// #if defined(__INTELLISENSE__) || defined(__clang__)
-// #ifndef CONFIG_TINYUSB_ENABLED
-// #define CONFIG_TINYUSB_ENABLED 1
-// #endif
-// #ifndef CONFIG_TINYUSB_HID_ENABLED
-// #define CONFIG_TINYUSB_HID_ENABLED 1
-// #endif
-// #endif
-
-// #include <USB.h>
-// #include <USBHIDKeyboard.h>
-// USBHIDKeyboard Keyboard;
+#include <USB.h>
+#include <USBHIDKeyboard.h>
+USBHIDKeyboard Keyboard;
+#endif
 
 #include "auth.h"
 #include "device_state.h"
@@ -27,10 +23,11 @@
 #include "storage.h"
 #include "ui.h"
 
-// TODO [ESP32-S2/S3]: Uncomment when USB HID is available.
-// static uint8_t getHidModeFromFlags(uint8_t flags) {
-//     return (uint8_t)((flags & CRED_FLAG_HID_MODE_MASK) >> CRED_FLAG_HID_MODE_SHIFT);
-// }
+#if defined(VAULTKEY_ENABLE_USB_HID) && VAULTKEY_ENABLE_USB_HID
+static uint8_t getHidModeFromFlags(uint8_t flags) {
+    return (uint8_t)((flags & CRED_FLAG_HID_MODE_MASK) >> CRED_FLAG_HID_MODE_SHIFT);
+}
+#endif
 
 static bool selectedHasTotp(int id) {
     const uint8_t *key = getEncryptionKey();
@@ -42,33 +39,40 @@ static bool selectedHasTotp(int id) {
     return has;
 }
 
-// static void typeSelectedViaHid(int id) {
-//     const uint8_t *key = getEncryptionKey();
-//     if (!key) return;
+#if defined(VAULTKEY_ENABLE_USB_HID) && VAULTKEY_ENABLE_USB_HID
+static void typeSelectedViaHid(int id) {
+    const uint8_t *key = getEncryptionKey();
+    if (!key) return;
 
-//     credential_entry_t cred;
-//     if (!getCredential(id, cred, key)) return;
+    credential_entry_t cred;
+    if (!getCredential(id, cred, key)) return;
 
-//     const uint8_t mode = getHidModeFromFlags(cred.flags);
+    const uint8_t mode = getHidModeFromFlags(cred.flags);
 
-//     if (mode == 0) {
-//         Keyboard.print(cred.password);
-//     } else {
-//         if (strlen(cred.username) > 0) Keyboard.print(cred.username);
-//         Keyboard.write(KEY_TAB);
-//         Keyboard.print(cred.password);
-//         if (mode == 2) Keyboard.write(KEY_RETURN);
-//     }
+    if (mode == 0) {
+        Keyboard.print(cred.password);
+    } else {
+        if (strlen(cred.username) > 0) Keyboard.print(cred.username);
+        Keyboard.write(KEY_TAB);
+        Keyboard.print(cred.password);
+        if (mode == 2) Keyboard.write(KEY_RETURN);
+    }
 
-//     Keyboard.releaseAll();
-//     memset(&cred, 0, sizeof(cred));
-// }
+    Keyboard.releaseAll();
+    memset(&cred, 0, sizeof(cred));
+}
+#endif
 
 void setup() {
     Serial.begin(115200); // USB CDC (WebSerial)
-    // TODO [ESP32-S2/S3]: Uncomment USB HID init when migrating.
-    // Keyboard.begin();
-    // USB.begin();
+#if defined(VAULTKEY_ENABLE_USB_HID) && VAULTKEY_ENABLE_USB_HID
+    Keyboard.begin();
+    // When `ARDUINO_USB_MODE=0` (TinyUSB), USB is started automatically on boot
+    // when `ARDUINO_USB_CDC_ON_BOOT=1`. Starting it again can cause a disconnect.
+#if ARDUINO_USB_MODE
+    USB.begin();
+#endif
+#endif
 
     authInit();
     storageInit();
@@ -138,7 +142,6 @@ void loop() {
             }
 
             if (ev.confirm_long) {
-                // TODO [ESP32-S2/S3]: Restore CONFIRM_HID transitions when HID is available.
                 if (selectedHasTotp(selected)) {
                     deviceSetUiState(DeviceUiState::TOTP);
                 } else {
@@ -147,14 +150,19 @@ void loop() {
             }
 
             if (ev.confirm_short) {
-                // TODO [ESP32-S2/S3]: Restore HID typing on confirm_short.
-                // if (deviceGetUiState() == DeviceUiState::CONFIRM_HID) {
-                //     typeSelectedViaHid(selected);
-                //     deviceSetUiState(DeviceUiState::SELECTED);
-                // } else {
-                //     deviceSetUiState(DeviceUiState::CONFIRM_HID);
-                // }
+#if defined(VAULTKEY_ENABLE_USB_HID) && VAULTKEY_ENABLE_USB_HID
+                const DeviceUiState state = deviceGetUiState();
+                if (state == DeviceUiState::CONFIRM_HID) {
+                    typeSelectedViaHid(selected);
+                    deviceSetUiState(DeviceUiState::SELECTED);
+                } else if (state == DeviceUiState::TOTP) {
+                    deviceSetUiState(DeviceUiState::SELECTED);
+                } else {
+                    deviceSetUiState(DeviceUiState::CONFIRM_HID);
+                }
+#else
                 deviceSetUiState(DeviceUiState::SELECTED);
+#endif
             }
         }
     }

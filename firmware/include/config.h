@@ -3,8 +3,8 @@
 
 #include <Arduino.h>
 
-#define OLED_SDA_PIN 22
-#define OLED_SCL_PIN 21
+#define OLED_SDA_PIN 17
+#define OLED_SCL_PIN 18
 
 #define SCREEN_WIDTH 128
 #define SCREEN_HEIGHT 64

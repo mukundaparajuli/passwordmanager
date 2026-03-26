@@ -8,8 +8,7 @@ enum class DeviceUiState : uint8_t {
     IDLE,
     SELECTED,
     TOTP,
-    // TODO [ESP32-S2/S3]: Uncomment when USB HID typing is available.
-    // CONFIRM_HID,
+    CONFIRM_HID,
 };
 
 void deviceStateInit();

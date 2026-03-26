@@ -125,21 +125,26 @@ void uiRender(DeviceUiState state, int selectedId) {
         return;
     }
 
-    // TODO [ESP32-S2/S3]: Uncomment CONFIRM_HID UI block when USB HID is available.
-    // if (state == DeviceUiState::CONFIRM_HID) {
-    //     display.setTextSize(1);
-    //     display.setCursor(0, 0);
-    //     display.println("Password:");
-    //     display.println();
-    //     display.println(svc.length() ? svc : "(unnamed)");
-    //     display.println();
-    //     display.println(ellipsize(cred.password, 21));
-    //     display.println();
-    //     display.println("CONFIRM: Type");
-    //     display.display();
-    //     memset(&cred, 0, sizeof(cred));
-    //     return;
-    // }
+    if (state == DeviceUiState::CONFIRM_HID) {
+        display.setTextSize(1);
+        display.setCursor(0, 0);
+#if defined(VAULTKEY_ENABLE_USB_HID) && VAULTKEY_ENABLE_USB_HID
+        display.println("Password:");
+        display.println();
+        display.println(svc.length() ? svc : "(unnamed)");
+        display.println();
+        display.println(ellipsize(cred.password, 21));
+        display.println();
+        display.println("CONFIRM: Type");
+#else
+        display.println("HID disabled");
+        display.println();
+        display.println("Rebuild for ESP32-S3");
+#endif
+        display.display();
+        memset(&cred, 0, sizeof(cred));
+        return;
+    }
 
     if (state == DeviceUiState::TOTP) {
         if (strlen(cred.totp_secret) == 0) {
