@@ -7,30 +7,35 @@
 #include <string.h>
 
 #include "crypto.h"
+#include "storage.h"
 
-static const char *AUTH_NAMESPACE = "vault";
+namespace {
 
-static const size_t SALT_LEN = 16;
-static const size_t SESSION_TOKEN_LEN = 32;
+static const char *NS = "vault";
 
-static const uint32_t DEFAULT_KDF_ITERS = 50000;
-static const uint32_t AUTO_LOCK_MS = 60UL * 1000UL;
-static const uint32_t LOCKOUT_MS = 5UL * 60UL * 1000UL;
-static const uint8_t MAX_FAILED_ATTEMPTS = 5;
+static constexpr size_t SALT_LEN = 16;
+static constexpr size_t VERIFY_CIPHER_LEN = 32;
+static constexpr size_t SESSION_TOKEN_LEN = 32;
+
+static constexpr uint32_t KDF_ITERS = 10000;
+static constexpr uint32_t AUTO_LOCK_MS = 120UL * 1000UL;
+
+static constexpr uint8_t MAX_FAILED_ATTEMPTS = 5;
+static constexpr uint32_t LOCKOUT_BASE_MS = 30UL * 1000UL;
+static constexpr uint32_t LOCKOUT_MAX_MS = 15UL * 60UL * 1000UL;
+
+static const uint8_t VERIFY_PLAINTEXT[16] = {
+    'V','A','U','L','T','K','E','Y','_','V','E','R','I','F','Y','_'
+};
 
 static uint8_t encKey[AES_KEY_SIZE];
 static uint8_t sessionToken[SESSION_TOKEN_LEN];
 static bool authenticated = false;
-static bool sessionActive = false;
-
 static uint32_t lastActivityMs = 0;
 
 static uint8_t failedAttempts = 0;
+static uint8_t lockoutLevel = 0;
 static uint32_t lockoutUntilMs = 0;
-
-static const uint8_t VERIFY_PLAINTEXT[] = {
-    'V','A','U','L','T','K','E','Y','_','V','E','R','I','F','Y','1'
-};
 
 static bool safeCompare(const uint8_t *a, const uint8_t *b, size_t len) {
     uint8_t diff = 0;
@@ -49,26 +54,12 @@ static String bytesToHex(const uint8_t *bytes, size_t len) {
     return out;
 }
 
-static int hexNibble(char c) {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'a' && c <= 'f') return 10 + (c - 'a');
-    if (c >= 'A' && c <= 'F') return 10 + (c - 'A');
-    return -1;
-}
-
-static bool hexToBytes(const String &hex, uint8_t *out, size_t outLen) {
-    if (hex.length() != (int)(outLen * 2)) return false;
-    for (size_t i = 0; i < outLen; i++) {
-        int hi = hexNibble(hex[(int)(i * 2)]);
-        int lo = hexNibble(hex[(int)(i * 2 + 1)]);
-        if (hi < 0 || lo < 0) return false;
-        out[i] = (uint8_t)((hi << 4) | lo);
-    }
-    return true;
+static void randomBytes(uint8_t *out, size_t len) {
+    esp_fill_random(out, len);
 }
 
 static bool deriveKeyPBKDF2(const uint8_t *salt, size_t saltLen,
-                            const String &pin, uint32_t iterations,
+                            const String &pin,
                             uint8_t *outKey) {
     mbedtls_md_context_t ctx;
     const mbedtls_md_info_t *info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
@@ -84,15 +75,19 @@ static bool deriveKeyPBKDF2(const uint8_t *salt, size_t saltLen,
     ret = mbedtls_pkcs5_pbkdf2_hmac(&ctx,
                                     (const unsigned char *)pin.c_str(), pin.length(),
                                     salt, saltLen,
-                                    iterations,
+                                    KDF_ITERS,
                                     AES_KEY_SIZE,
                                     outKey);
     mbedtls_md_free(&ctx);
     return ret == 0;
 }
 
-static void randomBytes(uint8_t *out, size_t len) {
-    esp_fill_random(out, len);
+static bool validatePinFormat(const String &pin) {
+    if (pin.length() < 4 || pin.length() > 8) return false;
+    for (size_t i = 0; i < pin.length(); i++) {
+        if (!isDigit(pin[i])) return false;
+    }
+    return true;
 }
 
 static bool isLockoutActive(uint32_t nowMs, uint32_t &outRemaining) {
@@ -109,170 +104,100 @@ static bool isLockoutActive(uint32_t nowMs, uint32_t &outRemaining) {
     return true;
 }
 
-static bool validatePinFormat(const String &pin, String &outError) {
-    if (pin.length() < 4 || pin.length() > 12) {
-        outError = "PIN must be 4–12 digits.";
-        return false;
+static uint32_t computeLockoutMs(uint8_t level) {
+    uint32_t ms = LOCKOUT_BASE_MS;
+    for (uint8_t i = 1; i < level; i++) {
+        if (ms >= (LOCKOUT_MAX_MS / 2)) return LOCKOUT_MAX_MS;
+        ms *= 2;
     }
-    for (size_t i = 0; i < pin.length(); i++) {
-        if (!isDigit(pin[i])) {
-            outError = "PIN must be numeric.";
-            return false;
-        }
-    }
-    return true;
+    if (ms > LOCKOUT_MAX_MS) ms = LOCKOUT_MAX_MS;
+    return ms;
 }
 
-static bool setupPinInternal(const String &pin, String &outError) {
-    uint8_t salt[SALT_LEN];
-    randomBytes(salt, sizeof(salt));
-
-    uint8_t key[AES_KEY_SIZE];
-    if (!deriveKeyPBKDF2(salt, sizeof(salt), pin, DEFAULT_KDF_ITERS, key)) {
-        outError = "Key derivation failed.";
+static bool readSaltAndVerify(uint8_t salt[SALT_LEN], uint8_t verify[VERIFY_CIPHER_LEN]) {
+    Preferences prefs;
+    prefs.begin(NS, true);
+    size_t saltRead = prefs.getBytes("salt", salt, SALT_LEN);
+    size_t verifyLen = prefs.getBytesLength("verify");
+    if (verifyLen != VERIFY_CIPHER_LEN) {
+        prefs.end();
         return false;
     }
+    prefs.getBytes("verify", verify, VERIFY_CIPHER_LEN);
+    prefs.end();
+    return saltRead == SALT_LEN;
+}
 
-    uint8_t verifyIv[IV_SIZE];
-    randomBytes(verifyIv, sizeof(verifyIv));
+static bool writeSaltAndVerify(const uint8_t salt[SALT_LEN], const uint8_t verify[VERIFY_CIPHER_LEN]) {
+    Preferences prefs;
+    prefs.begin(NS, false);
+    bool ok = prefs.putBytes("salt", salt, SALT_LEN) == SALT_LEN &&
+              prefs.putBytes("verify", verify, VERIFY_CIPHER_LEN) == VERIFY_CIPHER_LEN;
+    prefs.end();
+    return ok;
+}
 
-    uint8_t verifyCipher[sizeof(VERIFY_PLAINTEXT) + AES_BLOCK_SIZE];
+static bool writeVerifyForKey(const uint8_t key[AES_KEY_SIZE]) {
+    uint8_t iv[IV_SIZE] = {0};
+    uint8_t verifyCipher[VERIFY_CIPHER_LEN];
     size_t verifyCipherLen = 0;
 
-    if (!aesEncrypt(key, verifyIv,
-                    VERIFY_PLAINTEXT, sizeof(VERIFY_PLAINTEXT),
-                    verifyCipher, verifyCipherLen)) {
-        memset(key, 0, sizeof(key));
-        outError = "Verify encryption failed.";
+    if (!aesEncrypt(key, iv, VERIFY_PLAINTEXT, sizeof(VERIFY_PLAINTEXT), verifyCipher, verifyCipherLen)) {
         return false;
     }
-
-    const size_t blobLen = IV_SIZE + verifyCipherLen;
-    uint8_t *blob = (uint8_t *)malloc(blobLen);
-    if (!blob) {
-        memset(key, 0, sizeof(key));
-        outError = "Out of memory.";
-        return false;
-    }
-    memcpy(blob, verifyIv, IV_SIZE);
-    memcpy(blob + IV_SIZE, verifyCipher, verifyCipherLen);
+    if (verifyCipherLen != VERIFY_CIPHER_LEN) return false;
 
     Preferences prefs;
-    prefs.begin(AUTH_NAMESPACE, false);
-    prefs.putBytes("salt", salt, sizeof(salt));
-    prefs.putUInt("kdf_iters", DEFAULT_KDF_ITERS);
-    prefs.putBytes("verify", blob, blobLen);
+    prefs.begin(NS, false);
+    bool ok = prefs.putBytes("verify", verifyCipher, verifyCipherLen) == verifyCipherLen;
     prefs.end();
 
-    memset(blob, 0, blobLen);
-    free(blob);
-
-    memcpy(encKey, key, sizeof(encKey));
-    memset(key, 0, sizeof(key));
-
-    authenticated = true;
-    sessionActive = true;
-    randomBytes(sessionToken, sizeof(sessionToken));
-    lastActivityMs = millis();
-    failedAttempts = 0;
-    lockoutUntilMs = 0;
-
-    return true;
+    memset(verifyCipher, 0, sizeof(verifyCipher));
+    return ok;
 }
 
-static bool verifyPinInternal(const String &pin, String &outError) {
-    Preferences prefs;
-    prefs.begin(AUTH_NAMESPACE, true);
-
+static bool verifyKeyAgainstStored(const uint8_t key[AES_KEY_SIZE]) {
     uint8_t salt[SALT_LEN];
-    size_t saltRead = prefs.getBytes("salt", salt, sizeof(salt));
-    uint32_t iters = prefs.getUInt("kdf_iters", DEFAULT_KDF_ITERS);
-
-    size_t blobLen = prefs.getBytesLength("verify");
-    if (saltRead != sizeof(salt) || blobLen < (IV_SIZE + AES_BLOCK_SIZE)) {
-        prefs.end();
-        outError = "Device not initialized (missing auth data).";
+    uint8_t verifyCipher[VERIFY_CIPHER_LEN];
+    if (!readSaltAndVerify(salt, verifyCipher)) {
+        memset(salt, 0, sizeof(salt));
+        memset(verifyCipher, 0, sizeof(verifyCipher));
         return false;
     }
 
-    uint8_t *blob = (uint8_t *)malloc(blobLen);
-    if (!blob) {
-        prefs.end();
-        outError = "Out of memory.";
-        return false;
-    }
-    prefs.getBytes("verify", blob, blobLen);
-    prefs.end();
-
-    uint8_t key[AES_KEY_SIZE];
-    if (!deriveKeyPBKDF2(salt, sizeof(salt), pin, iters, key)) {
-        memset(blob, 0, blobLen);
-        free(blob);
-        outError = "Key derivation failed.";
-        return false;
-    }
-
-    uint8_t iv[IV_SIZE];
-    memcpy(iv, blob, IV_SIZE);
-    const uint8_t *cipher = blob + IV_SIZE;
-    size_t cipherLen = blobLen - IV_SIZE;
-
-    uint8_t *plaintext = (uint8_t *)malloc(cipherLen);
-    if (!plaintext) {
-        memset(key, 0, sizeof(key));
-        memset(blob, 0, blobLen);
-        free(blob);
-        outError = "Out of memory.";
-        return false;
-    }
-
+    uint8_t iv[IV_SIZE] = {0};
+    uint8_t plain[VERIFY_CIPHER_LEN];
     size_t plainLen = 0;
-    bool ok = aesDecrypt(key, iv, cipher, cipherLen, plaintext, plainLen);
 
+    bool ok = aesDecrypt(key, iv, verifyCipher, VERIFY_CIPHER_LEN, plain, plainLen);
     bool match = ok && plainLen == sizeof(VERIFY_PLAINTEXT) &&
-                 safeCompare(plaintext, VERIFY_PLAINTEXT, sizeof(VERIFY_PLAINTEXT));
+                 safeCompare(plain, VERIFY_PLAINTEXT, sizeof(VERIFY_PLAINTEXT));
 
-    memset(plaintext, 0, cipherLen);
-    free(plaintext);
-
-    memset(blob, 0, blobLen);
-    free(blob);
-
-    if (!match) {
-        memset(key, 0, sizeof(key));
-        outError = "Wrong PIN.";
-        return false;
-    }
-
-    memcpy(encKey, key, sizeof(encKey));
-    memset(key, 0, sizeof(key));
-
-    authenticated = true;
-    sessionActive = true;
-    randomBytes(sessionToken, sizeof(sessionToken));
-    lastActivityMs = millis();
-    failedAttempts = 0;
-    lockoutUntilMs = 0;
-
-    return true;
+    memset(salt, 0, sizeof(salt));
+    memset(verifyCipher, 0, sizeof(verifyCipher));
+    memset(plain, 0, sizeof(plain));
+    return match;
 }
+
+} // namespace
 
 void authInit() {
     authLock();
     failedAttempts = 0;
+    lockoutLevel = 0;
     lockoutUntilMs = 0;
 }
 
 bool isPinConfigured() {
     Preferences prefs;
-    prefs.begin(AUTH_NAMESPACE, true);
+    prefs.begin(NS, true);
     bool hasSalt = prefs.getBytesLength("salt") == SALT_LEN;
-    bool hasVerify = prefs.getBytesLength("verify") > 0;
+    bool hasVerify = prefs.getBytesLength("verify") == VERIFY_CIPHER_LEN;
     prefs.end();
     return hasSalt && hasVerify;
 }
 
-UnlockResult authUnlock(const String &pin, const String &pinConfirm) {
+UnlockResult authUnlock(const String &pin) {
     UnlockResult res;
 
     uint32_t remaining = 0;
@@ -280,86 +205,264 @@ UnlockResult authUnlock(const String &pin, const String &pinConfirm) {
     if (isLockoutActive(now, remaining)) {
         res.locked_out = true;
         res.lockout_ms_remaining = remaining;
-        res.error = "Too many attempts. Try again later.";
+        res.error_code = "locked_out";
         return res;
     }
 
-    String err;
-    if (!validatePinFormat(pin, err)) {
-        res.error = err;
+    if (!validatePinFormat(pin)) {
+        res.error_code = "bad_pin";
         return res;
     }
 
     if (!isPinConfigured()) {
-        if (pinConfirm.length() == 0) {
-            res.needs_pin_confirm = true;
-            res.error = "First-time setup: pin_confirm is required.";
+        uint8_t salt[SALT_LEN];
+        randomBytes(salt, sizeof(salt));
+
+        uint8_t key[AES_KEY_SIZE];
+        if (!deriveKeyPBKDF2(salt, sizeof(salt), pin, key)) {
+            memset(salt, 0, sizeof(salt));
+            res.error_code = "kdf_failed";
             return res;
         }
-        if (pinConfirm != pin) {
-            res.error = "PINs do not match.";
+
+        uint8_t iv[IV_SIZE] = {0};
+        uint8_t verifyCipher[VERIFY_CIPHER_LEN];
+        size_t verifyCipherLen = 0;
+        if (!aesEncrypt(key, iv, VERIFY_PLAINTEXT, sizeof(VERIFY_PLAINTEXT), verifyCipher, verifyCipherLen) ||
+            verifyCipherLen != VERIFY_CIPHER_LEN) {
+            memset(salt, 0, sizeof(salt));
+            memset(key, 0, sizeof(key));
+            memset(verifyCipher, 0, sizeof(verifyCipher));
+            res.error_code = "verify_encrypt_failed";
             return res;
         }
-        if (!setupPinInternal(pin, err)) {
-            res.error = err;
+
+        if (!writeSaltAndVerify(salt, verifyCipher)) {
+            memset(salt, 0, sizeof(salt));
+            memset(key, 0, sizeof(key));
+            memset(verifyCipher, 0, sizeof(verifyCipher));
+            res.error_code = "nvs_write_failed";
             return res;
         }
+
+        memset(salt, 0, sizeof(salt));
+        memset(verifyCipher, 0, sizeof(verifyCipher));
+
+        memcpy(encKey, key, sizeof(encKey));
+        memset(key, 0, sizeof(key));
+
+        authenticated = true;
+        randomBytes(sessionToken, sizeof(sessionToken));
+        lastActivityMs = millis();
+        failedAttempts = 0;
+        lockoutLevel = 0;
+        lockoutUntilMs = 0;
 
         res.ok = true;
         res.token = bytesToHex(sessionToken, sizeof(sessionToken));
         return res;
     }
 
-    if (!verifyPinInternal(pin, err)) {
+    uint8_t salt[SALT_LEN];
+    uint8_t verifyCipher[VERIFY_CIPHER_LEN];
+    if (!readSaltAndVerify(salt, verifyCipher)) {
+        memset(salt, 0, sizeof(salt));
+        memset(verifyCipher, 0, sizeof(verifyCipher));
+        res.error_code = "not_initialized";
+        return res;
+    }
+
+    uint8_t key[AES_KEY_SIZE];
+    if (!deriveKeyPBKDF2(salt, sizeof(salt), pin, key)) {
+        memset(salt, 0, sizeof(salt));
+        memset(verifyCipher, 0, sizeof(verifyCipher));
+        res.error_code = "kdf_failed";
+        return res;
+    }
+
+    memset(salt, 0, sizeof(salt));
+    memset(verifyCipher, 0, sizeof(verifyCipher));
+
+    if (!verifyKeyAgainstStored(key)) {
+        memset(key, 0, sizeof(key));
         failedAttempts++;
+
         if (failedAttempts >= MAX_FAILED_ATTEMPTS) {
-            lockoutUntilMs = millis() + LOCKOUT_MS;
             failedAttempts = 0;
-            uint32_t lockRemaining = 0;
-            isLockoutActive(millis(), lockRemaining);
+            if (lockoutLevel < 16) lockoutLevel++;
+            const uint32_t lockMs = computeLockoutMs(lockoutLevel);
+            lockoutUntilMs = millis() + lockMs;
             res.locked_out = true;
-            res.lockout_ms_remaining = lockRemaining;
-            res.error = "Too many attempts. Locked out.";
+            res.lockout_ms_remaining = lockMs;
+            res.error_code = "locked_out";
             return res;
         }
 
-        res.error = err;
+        res.wrong_pin = true;
+        res.failed_attempts = failedAttempts;
+        res.max_attempts = MAX_FAILED_ATTEMPTS;
+        res.error_code = "wrong_pin";
         return res;
     }
+
+    memcpy(encKey, key, sizeof(encKey));
+    memset(key, 0, sizeof(key));
+
+    authenticated = true;
+    randomBytes(sessionToken, sizeof(sessionToken));
+    lastActivityMs = millis();
+    failedAttempts = 0;
+    lockoutLevel = 0;
+    lockoutUntilMs = 0;
 
     res.ok = true;
     res.token = bytesToHex(sessionToken, sizeof(sessionToken));
     return res;
 }
 
+ChangePinResult authChangePin(const String &oldPin, const String &newPin) {
+    ChangePinResult res;
+
+    if (!isAuthenticated()) {
+        res.error_code = "locked";
+        return res;
+    }
+
+    if (!validatePinFormat(oldPin) || !validatePinFormat(newPin)) {
+        res.error_code = "bad_pin";
+        return res;
+    }
+
+    if (oldPin == newPin) {
+        res.error_code = "same_pin";
+        return res;
+    }
+
+    uint8_t salt[SALT_LEN];
+    Preferences prefs;
+    prefs.begin(NS, true);
+    size_t saltRead = prefs.getBytes("salt", salt, sizeof(salt));
+    prefs.end();
+    if (saltRead != sizeof(salt)) {
+        memset(salt, 0, sizeof(salt));
+        res.error_code = "not_initialized";
+        return res;
+    }
+
+    uint8_t candidateOld[AES_KEY_SIZE];
+    if (!deriveKeyPBKDF2(salt, sizeof(salt), oldPin, candidateOld)) {
+        memset(salt, 0, sizeof(salt));
+        res.error_code = "kdf_failed";
+        return res;
+    }
+
+    if (!safeCompare(candidateOld, encKey, sizeof(encKey))) {
+        memset(salt, 0, sizeof(salt));
+        memset(candidateOld, 0, sizeof(candidateOld));
+        res.error_code = "wrong_pin";
+        return res;
+    }
+
+    uint8_t newKey[AES_KEY_SIZE];
+    if (!deriveKeyPBKDF2(salt, sizeof(salt), newPin, newKey)) {
+        memset(salt, 0, sizeof(salt));
+        memset(candidateOld, 0, sizeof(candidateOld));
+        res.error_code = "kdf_failed";
+        return res;
+    }
+
+    memset(salt, 0, sizeof(salt));
+    memset(candidateOld, 0, sizeof(candidateOld));
+
+    const uint8_t *oldKey = encKey;
+    const int count = getCredentialCount();
+
+    credential_entry_t *plainCreds = nullptr;
+    if (count > 0) {
+        plainCreds = (credential_entry_t *)calloc((size_t)count, sizeof(credential_entry_t));
+        if (!plainCreds) {
+            memset(newKey, 0, sizeof(newKey));
+            res.error_code = "oom";
+            return res;
+        }
+
+        for (int i = 0; i < count; i++) {
+            if (!getCredential(i, plainCreds[i], oldKey)) {
+                for (int j = 0; j < count; j++) memset(&plainCreds[j], 0, sizeof(plainCreds[j]));
+                free(plainCreds);
+                memset(newKey, 0, sizeof(newKey));
+                res.error_code = "decrypt_failed";
+                return res;
+            }
+        }
+
+        for (int i = 0; i < count; i++) {
+            if (!updateCredential(i, plainCreds[i], newKey)) {
+                // Best-effort rollback: re-encrypt already migrated entries back to old key.
+                for (int j = 0; j < i; j++) {
+                    updateCredential(j, plainCreds[j], oldKey);
+                }
+
+                for (int j = 0; j < count; j++) memset(&plainCreds[j], 0, sizeof(plainCreds[j]));
+                free(plainCreds);
+                memset(newKey, 0, sizeof(newKey));
+                res.error_code = "reencrypt_failed";
+                return res;
+            }
+            delay(0);
+        }
+    }
+
+    if (!writeVerifyForKey(newKey)) {
+        // Best-effort rollback to the old key if we can.
+        if (plainCreds) {
+            for (int i = 0; i < count; i++) {
+                updateCredential(i, plainCreds[i], oldKey);
+                delay(0);
+            }
+        }
+        if (plainCreds) {
+            for (int j = 0; j < count; j++) memset(&plainCreds[j], 0, sizeof(plainCreds[j]));
+            free(plainCreds);
+        }
+        memset(newKey, 0, sizeof(newKey));
+        res.error_code = "verify_write_failed";
+        return res;
+    }
+
+    if (plainCreds) {
+        for (int j = 0; j < count; j++) memset(&plainCreds[j], 0, sizeof(plainCreds[j]));
+        free(plainCreds);
+    }
+
+    memcpy(encKey, newKey, sizeof(encKey));
+    memset(newKey, 0, sizeof(newKey));
+
+    randomBytes(sessionToken, sizeof(sessionToken));
+    lastActivityMs = millis();
+
+    res.ok = true;
+    return res;
+}
+
 void authLock() {
     authenticated = false;
-    sessionActive = false;
     lastActivityMs = 0;
     memset(encKey, 0, sizeof(encKey));
     memset(sessionToken, 0, sizeof(sessionToken));
 }
 
 void authRecordActivity() {
-    if (!authenticated || !sessionActive) return;
+    if (!authenticated) return;
     lastActivityMs = millis();
 }
 
 void authLoop() {
-    if (!authenticated || !sessionActive) return;
+    if (!authenticated) return;
     uint32_t now = millis();
     if (lastActivityMs != 0 && (uint32_t)(now - lastActivityMs) > AUTO_LOCK_MS) {
         authLock();
     }
-}
-
-bool authVerifySessionToken(const String &tokenHex) {
-    if (!authenticated || !sessionActive) return false;
-    uint8_t candidate[SESSION_TOKEN_LEN];
-    if (!hexToBytes(tokenHex, candidate, sizeof(candidate))) return false;
-    bool ok = safeCompare(candidate, sessionToken, sizeof(sessionToken));
-    memset(candidate, 0, sizeof(candidate));
-    return ok;
 }
 
 const uint8_t *getEncryptionKey() {
@@ -367,5 +470,6 @@ const uint8_t *getEncryptionKey() {
 }
 
 bool isAuthenticated() {
-    return authenticated && sessionActive;
+    return authenticated;
 }
+

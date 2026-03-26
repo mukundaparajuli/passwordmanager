@@ -3,162 +3,217 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 #include <Wire.h>
+#include <string.h>
+#include <time.h>
 
 #include "auth.h"
 #include "config.h"
 #include "crypto.h"
 #include "storage.h"
 
-static Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+namespace {
+
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+String ellipsize(const char *s, size_t maxChars) {
+    if (!s) return "";
+    String str(s);
+    str.trim();
+    if (str.length() <= (int)maxChars) return str;
+    if (maxChars <= 1) return str.substring(0, maxChars);
+    return str.substring(0, maxChars - 1) + ".";
+}
+
+void drawProgressBar(int x, int y, int w, int h, float pct) {
+    if (pct < 0) pct = 0;
+    if (pct > 1) pct = 1;
+    display.drawRect(x, y, w, h, SSD1306_WHITE);
+    const int fillW = (int)((w - 2) * pct);
+    if (fillW > 0) display.fillRect(x + 1, y + 1, fillW, h - 2, SSD1306_WHITE);
+}
+
+} // namespace
 
 bool uiInit() {
     Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN);
 
     if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-        Serial.println("OLED init failed!");
+        Serial.println("[UI] OLED init failed");
         return false;
     }
 
     display.clearDisplay();
     display.setTextSize(1);
     display.setTextColor(SSD1306_WHITE);
+    display.display();
     return true;
 }
 
 void uiShowBootScreen() {
     display.clearDisplay();
     display.setCursor(0, 0);
-    display.println("VaultKey Ready");
+    display.println("VaultKey");
+    display.println();
+    display.println("Booting...");
     display.display();
 }
 
-void uiShowNoCredentials() {
+void uiRender(DeviceUiState state, int selectedId) {
     display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("No Credentials");
-    display.display();
-}
+    display.setTextColor(SSD1306_WHITE);
 
-void uiShowCredentialList(int selectedIndex, int credentialCount) {
-    display.clearDisplay();
-    display.setCursor(0, 0);
-    display.println("Vault");
-
-    const uint8_t *key = getEncryptionKey();
-    if (!key) return;
-
-    const int maxVisible = 6;
-    int startIndex = 0;
-
-    if (selectedIndex >= maxVisible)
-        startIndex = selectedIndex - maxVisible + 1;
-
-    for (int i = 0; i < maxVisible; i++) {
-        int credIndex = startIndex + i;
-        if (credIndex >= credentialCount) break;
-
-        credential_entry_t cred;
-        if (!getCredential(credIndex, cred, key)) continue;
-
-        if (credIndex == selectedIndex)
-            display.print("-> ");
-        else
-            display.print("   ");
-
-        display.println(strlen(cred.service) ? cred.service : "(unnamed)");
-        memset(&cred, 0, sizeof(cred));
+    if (state == DeviceUiState::LOCKED) {
+        display.setTextSize(1);
+        display.setCursor(0, 0);
+        display.println("VaultKey");
+        display.println();
+        display.println("LOCKED");
+        display.println();
+        display.println("Unlock via browser");
+        display.display();
+        return;
     }
 
-    display.display();
-}
-
-void uiShowCredentialDetail(int index) {
     const uint8_t *key = getEncryptionKey();
-    if (!key) return;
+    if (!key) {
+        display.setTextSize(1);
+        display.setCursor(0, 0);
+        display.println("VaultKey");
+        display.println();
+        display.println("LOCKED");
+        display.display();
+        return;
+    }
+
+    const int count = getCredentialCount();
+    if (count <= 0) {
+        display.setTextSize(1);
+        display.setCursor(0, 0);
+        display.println("VaultKey");
+        display.println();
+        display.println("No credentials");
+        display.display();
+        return;
+    }
 
     credential_entry_t cred;
-    if (!getCredential(index, cred, key)) return;
+    memset(&cred, 0, sizeof(cred));
+    bool haveCred = getCredential(selectedId, cred, key);
 
-    // Mask a string: show first char then asterisks, or all asterisks if short
-    auto mask = [](const char *s) -> String {
-        size_t n = strlen(s);
-        if (n == 0) return "****";
-        if (n <= 2) return String("****");
-        String masked;
-        masked.reserve(n);
-        masked += s[0];
-        for (size_t i = 1; i < n; i++) masked += '*';
-        return masked;
-    };
+    if (!haveCred) {
+        display.setTextSize(1);
+        display.setCursor(0, 0);
+        display.println("VaultKey");
+        display.println();
+        display.println("Not found");
+        display.display();
+        return;
+    }
 
-    display.clearDisplay();
+    const String svc = ellipsize(cred.service, 20);
+    const String user = ellipsize(cred.username, 21);
+
+    if (state == DeviceUiState::IDLE) {
+        display.setTextSize(1);
+        display.setCursor(0, 0);
+        display.println("VaultKey  OK");
+        display.println();
+        display.println("Selected:");
+        display.println(svc.length() ? svc : "(unnamed)");
+        display.display();
+        memset(&cred, 0, sizeof(cred));
+        return;
+    }
+
+    // TODO [ESP32-S2/S3]: Uncomment CONFIRM_HID UI block when USB HID is available.
+    // if (state == DeviceUiState::CONFIRM_HID) {
+    //     display.setTextSize(1);
+    //     display.setCursor(0, 0);
+    //     display.println("Password:");
+    //     display.println();
+    //     display.println(svc.length() ? svc : "(unnamed)");
+    //     display.println();
+    //     display.println(ellipsize(cred.password, 21));
+    //     display.println();
+    //     display.println("CONFIRM: Type");
+    //     display.display();
+    //     memset(&cred, 0, sizeof(cred));
+    //     return;
+    // }
+
+    if (state == DeviceUiState::TOTP) {
+        if (strlen(cred.totp_secret) == 0) {
+            display.setTextSize(1);
+            display.setCursor(0, 0);
+            display.println("No TOTP");
+            display.println();
+            display.println(svc.length() ? svc : "(unnamed)");
+            display.display();
+            memset(&cred, 0, sizeof(cred));
+            return;
+        }
+
+        const String code = generateTOTP(String(cred.totp_secret));
+        if (code == "NO_TIME") {
+            display.setTextSize(1);
+            display.setCursor(0, 0);
+            display.println("No time set");
+            display.println();
+            display.println("Unlock via browser");
+            display.display();
+            memset(&cred, 0, sizeof(cred));
+            return;
+        }
+        if (code == "INVALID") {
+            display.setTextSize(1);
+            display.setCursor(0, 0);
+            display.println("Bad TOTP");
+            display.println();
+            display.println(svc.length() ? svc : "(unnamed)");
+            display.display();
+            memset(&cred, 0, sizeof(cred));
+            return;
+        }
+
+        const time_t now = time(nullptr);
+        const int expiresIn = (int)(TOTP_PERIOD - (now % TOTP_PERIOD));
+
+        display.setTextSize(1);
+        display.setCursor(0, 0);
+        display.println(svc.length() ? svc : "(unnamed)");
+
+        display.setTextSize(3);
+        display.setCursor(0, 16);
+        display.println(code);
+
+        display.setTextSize(1);
+        display.setCursor(0, 54);
+        display.print("in ");
+        display.print(expiresIn);
+        display.print("s");
+
+        drawProgressBar(70, 56, 56, 7, (float)expiresIn / (float)TOTP_PERIOD);
+
+        display.display();
+        memset(&cred, 0, sizeof(cred));
+        return;
+    }
+
+    // SELECTED
+    display.setTextSize(2);
     display.setCursor(0, 0);
+    display.println(ellipsize(cred.service, 10));
 
-    display.print("Svc: ");
-    display.println(strlen(cred.service) ? cred.service : "(unnamed)");
+    display.setTextSize(1);
+    display.setCursor(0, 28);
+    display.print("User: ");
+    display.println(user.length() ? user : "-");
 
-    if (strlen(cred.url) > 0) {
-        display.print("URL: ");
-        display.println(cred.url);
-    }
-
-    display.print("ID:  ");
-    display.println(strlen(cred.username) ? cred.username : "-");
-
-    display.print("Pwd: ");
-    display.println(mask(cred.password));
-
-    if (strlen(cred.totp_secret) > 0) {
-        display.print("TOTP: ");
-        display.println("******");
-    }
+    display.setCursor(0, 44);
+    display.println("CONFIRM: Type");
+    display.setCursor(0, 54);
+    display.println("Hold: TOTP");
 
     display.display();
     memset(&cred, 0, sizeof(cred));
-}
-
-void uiShowPinSetup() {
-    display.clearDisplay();
-    display.setCursor(0, 10);
-    display.println("No PIN set.");
-    display.println();
-    display.println("Open web UI to");
-    display.println("set a PIN");
-    display.display();
-}
-
-void uiShowPinEntry() {
-    display.clearDisplay();
-    display.setCursor(0, 10);
-    display.println("Device Locked");
-    display.println();
-    display.println("Unlock in web UI");
-    display.display();
-}
-
-void uiShowPinOk() {
-    display.clearDisplay();
-    display.setCursor(0, 20);
-    display.setTextSize(2);
-    display.println("Unlocked!");
-    display.setTextSize(1);
-    display.display();
-}
-
-void uiShowPinFail() {
-    display.clearDisplay();
-    display.setCursor(0, 20);
-    display.setTextSize(2);
-    display.println("Wrong PIN");
-    display.setTextSize(1);
-    display.display();
-}
-
-void uiShowPinCreated() {
-    display.clearDisplay();
-    display.setCursor(0, 20);
-    display.setTextSize(2);
-    display.println("PIN Set!");
-    display.setTextSize(1);
-    display.display();
 }

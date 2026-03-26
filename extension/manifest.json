@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "VaultKey",
+  "version": "0.1.0",
+  "description": "VaultKey browser extension (WebSerial + ESP32 USB password manager).",
+  "permissions": ["storage", "activeTab", "scripting", "notifications"],
+  "host_permissions": ["<all_urls>"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": { "default_popup": "popup.html" },
+  "options_page": "options.html"
+}
+

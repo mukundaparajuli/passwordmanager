@@ -1,7 +1,7 @@
-#ifndef WEB_H
-#define WEB_H
+#ifndef SERIAL_PROTOCOL_H
+#define SERIAL_PROTOCOL_H
 
-void webInit();
+void serialProtocolInit();
+void serialProtocolLoop();
 
 #endif
-

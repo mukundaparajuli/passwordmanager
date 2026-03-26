@@ -3,11 +3,11 @@
 #include <Arduino.h>
 
 static int selectedIndex = 0;
-static bool showingDetail = false;
+static DeviceUiState uiState = DeviceUiState::LOCKED;
 
 void deviceStateInit() {
     selectedIndex = 0;
-    showingDetail = false;
+    uiState = DeviceUiState::LOCKED;
 }
 
 int deviceGetSelectedIndex() {
@@ -22,18 +22,17 @@ void deviceSetSelectedIndex(int index) {
 void deviceClampSelectedIndex(int count) {
     if (count <= 0) {
         selectedIndex = 0;
-        showingDetail = false;
+        uiState = DeviceUiState::IDLE;
         return;
     }
     if (selectedIndex < 0) selectedIndex = 0;
     if (selectedIndex >= count) selectedIndex = count - 1;
 }
 
-bool deviceIsShowingDetail() {
-    return showingDetail;
+DeviceUiState deviceGetUiState() {
+    return uiState;
 }
 
-void deviceSetShowingDetail(bool showing) {
-    showingDetail = showing;
+void deviceSetUiState(DeviceUiState state) {
+    uiState = state;
 }
-

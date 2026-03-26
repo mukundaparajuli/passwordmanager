@@ -3,7 +3,14 @@
 
 #include <Arduino.h>
 
+struct InputEvents {
+    bool up_pressed = false;
+    bool down_pressed = false;
+    bool confirm_short = false;
+    bool confirm_long = false;
+};
+
 void inputInit();
-void readButtons(bool &upPressed, bool &downPressed);
+void inputPoll(InputEvents &events);
 
 #endif

@@ -1,17 +1,11 @@
 #ifndef UI_H
 #define UI_H
 
-#include <Arduino.h>
+#include "device_state.h"
 
 bool uiInit();
 void uiShowBootScreen();
-void uiShowNoCredentials();
-void uiShowCredentialList(int selectedIndex, int credentialCount);
-void uiShowCredentialDetail(int index);
-void uiShowPinSetup();
-void uiShowPinEntry();
-void uiShowPinOk();
-void uiShowPinFail();
-void uiShowPinCreated();
+void uiRender(DeviceUiState state, int selectedId);
 
 #endif
+

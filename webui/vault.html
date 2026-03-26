@@ -1,0 +1,1340 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VaultKey</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --panel: rgba(255, 255, 255, 0.06);
+        --panel2: rgba(255, 255, 255, 0.09);
+        --text: rgba(255, 255, 255, 0.92);
+        --muted: rgba(255, 255, 255, 0.65);
+        --danger: #ff4d4d;
+        --ok: #39d98a;
+        --accent: #6ea8fe;
+        --border: rgba(255, 255, 255, 0.12);
+        --shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji",
+          "Segoe UI Emoji";
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        background: radial-gradient(1200px 600px at 25% 10%, rgba(110, 168, 254, 0.18), transparent 60%),
+          radial-gradient(900px 480px at 70% 30%, rgba(57, 217, 138, 0.12), transparent 55%),
+          radial-gradient(700px 420px at 35% 80%, rgba(255, 77, 77, 0.08), transparent 55%), var(--bg);
+        font-family: var(--sans);
+      }
+
+      .wrap {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+
+      .view {
+        display: none;
+      }
+      .view.active {
+        display: block;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+      }
+
+      .hero {
+        display: grid;
+        place-items: center;
+        padding: 56px 18px;
+      }
+
+      .logo {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, rgba(110, 168, 254, 1), rgba(57, 217, 138, 1));
+        box-shadow: 0 12px 26px rgba(110, 168, 254, 0.22);
+      }
+
+      h1 {
+        font-size: 28px;
+        margin: 16px 0 6px;
+        letter-spacing: 0.3px;
+      }
+
+      .sub {
+        margin: 0 0 22px;
+        color: var(--muted);
+      }
+
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+
+      button {
+        border: 1px solid var(--border);
+        background: var(--panel2);
+        color: var(--text);
+        padding: 10px 14px;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: transform 0.05s ease, background 0.15s ease;
+      }
+      button:hover {
+        background: rgba(255, 255, 255, 0.12);
+      }
+      button:active {
+        transform: translateY(1px);
+      }
+      button.primary {
+        border-color: rgba(110, 168, 254, 0.35);
+        background: rgba(110, 168, 254, 0.22);
+      }
+      button.danger {
+        border-color: rgba(255, 77, 77, 0.35);
+        background: rgba(255, 77, 77, 0.12);
+      }
+
+      input[type="text"],
+      input[type="password"] {
+        width: min(380px, 100%);
+        padding: 10px 12px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(0, 0, 0, 0.2);
+        color: var(--text);
+      }
+
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .topbar .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .pill {
+        font-size: 12px;
+        padding: 4px 9px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        color: var(--muted);
+      }
+      .pill.ok {
+        border-color: rgba(57, 217, 138, 0.4);
+        color: rgba(57, 217, 138, 0.95);
+      }
+      .pill.danger {
+        border-color: rgba(255, 77, 77, 0.45);
+        color: rgba(255, 77, 77, 0.95);
+      }
+
+      .content {
+        padding: 16px;
+      }
+
+      .notice {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.35;
+      }
+
+      .status {
+        margin-top: 12px;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      @media (min-width: 980px) {
+        .grid {
+          grid-template-columns: 380px 1fr;
+          align-items: start;
+        }
+      }
+
+      .list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .item {
+        border: 1px solid var(--border);
+        background: rgba(0, 0, 0, 0.18);
+        border-radius: 14px;
+        padding: 12px;
+      }
+
+      .item .title {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+      }
+
+      .item h3 {
+        margin: 0;
+        font-size: 15px;
+        letter-spacing: 0.2px;
+      }
+
+      .item .url {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 12px;
+        word-break: break-word;
+      }
+
+      .item .meta {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .item .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+
+      .totp {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px dashed rgba(255, 255, 255, 0.15);
+      }
+
+      .totp .code {
+        font-family: var(--mono);
+        font-size: 22px;
+        letter-spacing: 2px;
+      }
+
+      .ring {
+        width: 38px;
+        height: 38px;
+        border-radius: 999px;
+        background: conic-gradient(var(--accent) var(--deg), rgba(255, 255, 255, 0.15) 0);
+        display: grid;
+        place-items: center;
+      }
+      .ring > div {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.55);
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        color: var(--muted);
+        font-family: var(--mono);
+      }
+
+      dialog {
+        width: min(720px, calc(100% - 24px));
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: rgba(12, 16, 32, 0.98);
+        color: var(--text);
+        box-shadow: var(--shadow);
+      }
+
+      dialog::backdrop {
+        background: rgba(0, 0, 0, 0.55);
+      }
+
+      .modal-hd {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 14px 10px;
+        border-bottom: 1px solid var(--border);
+      }
+      .modal-hd h2 {
+        margin: 0;
+        font-size: 15px;
+      }
+      .modal-bd {
+        padding: 14px;
+      }
+
+      .form {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .form label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .form input,
+      .form select {
+        width: 100%;
+      }
+
+      .hr {
+        height: 1px;
+        background: var(--border);
+        margin: 10px 0;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      th,
+      td {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 8px 6px;
+        text-align: left;
+        vertical-align: top;
+        word-break: break-word;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+
+      progress {
+        width: 100%;
+        height: 10px;
+        border-radius: 999px;
+      }
+      progress::-webkit-progress-bar {
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 999px;
+      }
+      progress::-webkit-progress-value {
+        background: rgba(110, 168, 254, 0.65);
+        border-radius: 999px;
+      }
+
+      .small {
+        font-size: 12px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div id="view-disconnected" class="view active">
+        <div class="card hero">
+          <div class="logo" aria-hidden="true"></div>
+          <h1>VaultKey</h1>
+          <p class="sub">USB CDC + WebSerial password vault</p>
+          <div class="row">
+            <button id="btn-connect" class="primary">Connect to VaultKey</button>
+          </div>
+          <p class="notice">
+            Requires a Chromium browser with WebSerial support. Plug in your ESP32-S2/S3 device, then connect.
+          </p>
+          <div id="status-disconnected" class="status"></div>
+        </div>
+      </div>
+
+      <div id="view-connected" class="view">
+        <div class="card">
+          <div class="topbar">
+            <div class="brand">
+              <div class="logo" style="width: 28px; height: 28px; border-radius: 9px"></div>
+              <div>
+                <div style="font-weight: 650; letter-spacing: 0.2px">VaultKey</div>
+                <div class="small">Connected</div>
+              </div>
+            </div>
+            <div class="row">
+              <span class="pill">CDC</span>
+              <button id="btn-disconnect">Disconnect</button>
+            </div>
+          </div>
+          <div class="content">
+            <div class="row">
+              <input id="pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="8"
+                placeholder="PIN (4–8 digits)" />
+              <button id="btn-unlock" class="primary">Unlock</button>
+            </div>
+            <div class="notice">
+              First-time setup: the first successful unlock sets your PIN (no PIN is stored directly).
+            </div>
+            <div id="status-connected" class="status"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="view-unlocked" class="view">
+        <div class="card">
+          <div class="topbar">
+            <div class="brand">
+              <div class="logo" style="width: 28px; height: 28px; border-radius: 9px"></div>
+              <div>
+                <div style="font-weight: 650; letter-spacing: 0.2px">VaultKey</div>
+                <div class="small">Unlocked</div>
+              </div>
+            </div>
+            <div class="row">
+              <span id="pill-limit" class="pill ok">0 / 50</span>
+              <button id="btn-lock" class="danger">Lock</button>
+            </div>
+          </div>
+          <div class="content">
+            <div class="grid">
+              <div class="card" style="background: rgba(0, 0, 0, 0.12); box-shadow: none">
+                <div class="content" style="padding: 14px">
+                  <div class="row" style="justify-content: space-between">
+                    <div style="font-weight: 650">Search</div>
+                    <button id="btn-refresh">Refresh</button>
+                  </div>
+                  <div style="height: 8px"></div>
+                  <input id="search" type="text" placeholder="Filter by service or URL" />
+                  <div style="height: 10px"></div>
+                  <div class="row">
+                    <button id="btn-add" class="primary">Add Credential</button>
+                    <button id="btn-import">Import CSV</button>
+                  </div>
+                  <div id="status-unlocked" class="status"></div>
+                  <div class="notice">
+                    Passwords never appear in this UI. Use “Type (HID)” to have VaultKey type into the active app.
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div id="list" class="list"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <dialog id="modal-add">
+        <div class="modal-hd">
+          <h2>Add Credential</h2>
+          <button id="add-close">Close</button>
+        </div>
+        <div class="modal-bd">
+          <div class="form">
+            <div>
+              <label>Service Name</label>
+              <input id="add-service" type="text" maxlength="32" placeholder="GitHub" />
+            </div>
+            <div>
+              <label>URL</label>
+              <input id="add-url" type="text" maxlength="64" placeholder="github.com" />
+            </div>
+            <div>
+              <label>Username</label>
+              <input id="add-username" type="text" maxlength="32" placeholder="john" />
+            </div>
+            <div>
+              <label>Password</label>
+              <input id="add-password" type="password" maxlength="64" placeholder="••••••••" />
+            </div>
+            <div>
+              <label>TOTP Secret (optional)</label>
+              <input id="add-totp" type="text" maxlength="32" placeholder="BASE32SECRET" />
+            </div>
+            <div>
+              <label>HID Inject Mode</label>
+              <select id="add-hid-mode">
+                <option value="0">Password only</option>
+                <option value="1" selected>Username + TAB + Password</option>
+                <option value="2">Username + TAB + Password + ENTER</option>
+              </select>
+            </div>
+            <div class="row">
+              <button id="add-save" class="primary">Save</button>
+              <button id="add-cancel">Cancel</button>
+            </div>
+            <div id="status-add" class="status"></div>
+          </div>
+        </div>
+      </dialog>
+
+      <dialog id="modal-import">
+        <div class="modal-hd">
+          <h2>Import CSV</h2>
+          <button id="import-close">Close</button>
+        </div>
+        <div class="modal-bd">
+          <div class="form">
+            <div>
+              <label>Step 1: Choose CSV file</label>
+              <input id="import-file" type="file" accept=".csv,text/csv" />
+              <div id="import-format" class="small" style="margin-top: 6px"></div>
+            </div>
+            <div class="hr"></div>
+            <div>
+              <div class="row" style="justify-content: space-between">
+                <div>
+                  <div style="font-weight: 650">Step 2: Preview</div>
+                  <div class="small">Passwords are masked in preview</div>
+                </div>
+                <div class="row">
+                  <button id="import-select-all">Select All</button>
+                  <button id="import-deselect-all">Deselect All</button>
+                </div>
+              </div>
+              <div style="height: 10px"></div>
+              <div style="max-height: 280px; overflow: auto; border: 1px solid var(--border); border-radius: 12px">
+                <table>
+                  <thead>
+                    <tr>
+                      <th></th>
+                      <th>Service</th>
+                      <th>URL</th>
+                      <th>Username</th>
+                      <th>Password</th>
+                    </tr>
+                  </thead>
+                  <tbody id="import-preview"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="hr"></div>
+            <div>
+              <div style="font-weight: 650">Step 3: Import</div>
+              <div class="row" style="margin-top: 10px">
+                <button id="import-run" class="primary">Import Selected</button>
+                <span id="import-count" class="small"></span>
+              </div>
+              <div style="height: 10px"></div>
+              <progress id="import-progress" value="0" max="100"></progress>
+              <div id="status-import" class="status"></div>
+            </div>
+          </div>
+        </div>
+      </dialog>
+    </div>
+
+    <script>
+      class VaultKeySerial {
+        constructor() {
+          this.port = null;
+          this.reader = null;
+          this.writer = null;
+          this.decoder = new TextDecoder();
+          this.encoder = new TextEncoder();
+          this.buf = "";
+          this.waiters = [];
+          this.disconnectCallbacks = [];
+          this._disconnectListener = (e) => {
+            if (e && e.target === this.port) this._handleDisconnect();
+          };
+        }
+
+        onDisconnect(cb) {
+          this.disconnectCallbacks.push(cb);
+        }
+
+        async connect() {
+          if (!("serial" in navigator)) throw new Error("WebSerial not supported");
+          this.port = await navigator.serial.requestPort();
+          await this.port.open({ baudRate: 115200 });
+          this.writer = this.port.writable.getWriter();
+          this.reader = this.port.readable.getReader();
+          navigator.serial.addEventListener("disconnect", this._disconnectListener);
+          this._readLoop();
+        }
+
+        async disconnect() {
+          try {
+            navigator.serial.removeEventListener("disconnect", this._disconnectListener);
+          } catch {}
+
+          try {
+            if (this.reader) await this.reader.cancel();
+          } catch {}
+          try {
+            if (this.reader) this.reader.releaseLock();
+          } catch {}
+          try {
+            if (this.writer) this.writer.releaseLock();
+          } catch {}
+          try {
+            if (this.port) await this.port.close();
+          } catch {}
+
+          this.port = null;
+          this.reader = null;
+          this.writer = null;
+          this.buf = "";
+          this._rejectAll(new Error("disconnected"));
+        }
+
+        async send(cmdObject) {
+          if (!this.writer) throw new Error("not connected");
+          const line = JSON.stringify(cmdObject) + "\n";
+          await this.writer.write(this.encoder.encode(line));
+        }
+
+        async command(cmdObj, timeoutMs = 3000) {
+          let lastErr = null;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            await this.send(cmdObj);
+            try {
+              const res = await this._nextMessage(timeoutMs);
+              return res;
+            } catch (e) {
+              lastErr = e;
+              if (e && e.code === "malformed_json" && attempt === 0) continue;
+              throw e;
+            }
+          }
+          throw lastErr || new Error("timeout");
+        }
+
+        _nextMessage(timeoutMs) {
+          return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => {
+              reject(Object.assign(new Error("timeout"), { code: "timeout" }));
+            }, timeoutMs);
+
+            this.waiters.push({
+              resolve: (msg) => {
+                clearTimeout(timer);
+                resolve(msg);
+              },
+              reject: (err) => {
+                clearTimeout(timer);
+                reject(err);
+              },
+            });
+          });
+        }
+
+        _rejectAll(err) {
+          const ws = this.waiters.slice();
+          this.waiters = [];
+          for (const w of ws) w.reject(err);
+        }
+
+        _handleDisconnect() {
+          const err = Object.assign(new Error("disconnected"), { code: "disconnected" });
+          this._rejectAll(err);
+          for (const cb of this.disconnectCallbacks) {
+            try {
+              cb();
+            } catch {}
+          }
+        }
+
+        async _readLoop() {
+          try {
+            while (true) {
+              const { value, done } = await this.reader.read();
+              if (done) break;
+              this.buf += this.decoder.decode(value, { stream: true });
+
+              while (true) {
+                const idx = this.buf.indexOf("\n");
+                if (idx < 0) break;
+                const rawLine = this.buf.slice(0, idx);
+                this.buf = this.buf.slice(idx + 1);
+                const line = rawLine.trim();
+                if (!line) continue;
+
+                let msg = null;
+                try {
+                  msg = JSON.parse(line);
+                } catch {
+                  const err = Object.assign(new Error("malformed_json"), { code: "malformed_json", raw: line });
+                  const w = this.waiters.shift();
+                  if (w) w.reject(err);
+                  continue;
+                }
+
+                const w = this.waiters.shift();
+                if (w) w.resolve(msg);
+              }
+            }
+          } catch {
+            // Fall through to disconnect handler
+          }
+          this._handleDisconnect();
+        }
+      }
+
+      const state = {
+        serial: null,
+        token: null,
+        view: "disconnected",
+        credentials: [],
+        selectedExpandedId: null,
+        totpTimer: null,
+        lastInteractionMs: Date.now(),
+      };
+
+      const el = (id) => document.getElementById(id);
+
+      function setView(name) {
+        state.view = name;
+        for (const v of ["disconnected", "connected", "unlocked"]) {
+          el("view-" + v).classList.toggle("active", v === name);
+        }
+      }
+
+      function setStatus(which, text) {
+        const target =
+          which === "disconnected"
+            ? el("status-disconnected")
+            : which === "connected"
+            ? el("status-connected")
+            : which === "unlocked"
+            ? el("status-unlocked")
+            : which === "add"
+            ? el("status-add")
+            : which === "import"
+            ? el("status-import")
+            : null;
+        if (!target) return;
+        target.textContent = text || "";
+      }
+
+      function touch() {
+        state.lastInteractionMs = Date.now();
+      }
+
+      async function safeCommand(cmdObj) {
+        if (!state.serial) throw new Error("not connected");
+        const res = await state.serial.command(cmdObj, 3000);
+        if (!res || typeof res !== "object") throw new Error("bad_response");
+        if (res.status === "error") {
+          const err = new Error(res.message || "error");
+          err.device = res;
+          throw err;
+        }
+        return res;
+      }
+
+      async function connectFlow() {
+        touch();
+        setStatus("disconnected", "");
+        state.serial = new VaultKeySerial();
+        state.serial.onDisconnect(() => {
+          cleanupUnlocked();
+          setView("disconnected");
+          setStatus("disconnected", "Disconnected.");
+        });
+
+        await state.serial.connect();
+        const ping = await safeCommand({ cmd: "ping" });
+        if (ping.status !== "ok") throw new Error("ping_failed");
+        setView("connected");
+        setStatus("connected", "Connected. Enter PIN to unlock.");
+      }
+
+      function cleanupUnlocked() {
+        state.token = null;
+        state.credentials = [];
+        state.selectedExpandedId = null;
+        if (state.totpTimer) clearInterval(state.totpTimer);
+        state.totpTimer = null;
+        renderList();
+      }
+
+      async function unlockFlow() {
+        touch();
+        setStatus("connected", "");
+        const pin = el("pin").value.trim();
+        const res = await safeCommand({ cmd: "unlock", pin });
+        state.token = res.token || null;
+
+        // Sync time after unlock (needed for TOTP).
+        try {
+          await safeCommand({ cmd: "sync_time", timestamp: Math.floor(Date.now() / 1000) });
+        } catch (e) {
+          // Non-fatal; TOTP will show "no_time" if sync fails.
+        }
+
+        el("pin").value = "";
+        setView("unlocked");
+        await refreshList();
+      }
+
+      async function lockFlow() {
+        touch();
+        setStatus("unlocked", "");
+        try {
+          await safeCommand({ cmd: "lock" });
+        } catch {}
+        cleanupUnlocked();
+        setView("connected");
+        setStatus("connected", "Locked.");
+      }
+
+      function renderList() {
+        const q = (el("search").value || "").trim().toLowerCase();
+        const list = el("list");
+        list.innerHTML = "";
+
+        const creds = (state.credentials || []).filter((c) => {
+          if (!q) return true;
+          return (
+            (c.service || "").toLowerCase().includes(q) ||
+            (c.url || "").toLowerCase().includes(q) ||
+            (c.username || "").toLowerCase().includes(q)
+          );
+        });
+
+        const pill = el("pill-limit");
+        const count = state.credentials.length;
+        pill.textContent = `${count} / 50`;
+        pill.classList.toggle("ok", count < 45);
+        pill.classList.toggle("danger", count >= 45);
+
+        if (!creds.length) {
+          const empty = document.createElement("div");
+          empty.className = "item";
+          empty.innerHTML = `<div class="url">No matching credentials.</div>`;
+          list.appendChild(empty);
+          return;
+        }
+
+        for (const c of creds) {
+          const item = document.createElement("div");
+          item.className = "item";
+          item.setAttribute("data-id", String(c.id));
+          const expanded = state.selectedExpandedId === c.id;
+
+          item.innerHTML = `
+            <div class="title">
+              <div>
+                <h3>${escapeHtml(c.service || "(unnamed)")}</h3>
+                <div class="url">${escapeHtml(c.url || "")}</div>
+              </div>
+              <div class="pill">${c.id}</div>
+            </div>
+            <div class="meta">Username: <span style="font-family: var(--mono)">${escapeHtml(c.username || "-")}</span></div>
+            ${expanded ? `<div class="actions">
+                <button data-act="copy-user">Copy Username</button>
+                <button data-act="type" class="primary">Type (HID)</button>
+                <button data-act="delete" class="danger">Delete</button>
+              </div>
+              <div class="totp" data-totp>
+                <div class="ring" style="--deg: 0deg"><div>--</div></div>
+                <div>
+                  <div class="code" data-code>------</div>
+                  <div class="small" data-exp>—</div>
+                </div>
+              </div>` : ""}
+          `;
+
+          item.addEventListener("click", async (e) => {
+            const btn = e.target && e.target.closest ? e.target.closest("button") : null;
+            if (!btn && !expanded) {
+              touch();
+              state.selectedExpandedId = c.id;
+              renderList();
+              await onExpandCredential(c.id);
+              return;
+            }
+            if (!btn) return;
+            e.preventDefault();
+            e.stopPropagation();
+
+            touch();
+
+            const act = btn.getAttribute("data-act");
+            if (act === "copy-user") {
+              await navigator.clipboard.writeText(c.username || "");
+              setStatus("unlocked", `Copied username for ${c.service}`);
+              return;
+            }
+            if (act === "type") {
+              await safeCommand({ cmd: "select", id: c.id });
+              setStatus(
+                "unlocked",
+                `Selected ${c.service} on device. Focus target app and press CONFIRM twice on VaultKey (confirm screen, then type).`
+              );
+              return;
+            }
+            if (act === "delete") {
+              if (!confirm(`Delete "${c.service}"?`)) return;
+              await safeCommand({ cmd: "delete", id: c.id });
+              setStatus("unlocked", `Deleted ${c.service}`);
+              state.selectedExpandedId = null;
+              await refreshList();
+              return;
+            }
+          });
+
+          if (expanded) {
+            // Prevent clicking inside expanded area from collapsing.
+            item.addEventListener("dblclick", (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+            });
+          }
+
+          list.appendChild(item);
+        }
+      }
+
+      async function onExpandCredential(id) {
+        // Stop any previous per-credential TOTP loop.
+        if (state.totpTimer) clearInterval(state.totpTimer);
+        state.totpTimer = null;
+
+        const update = async () => {
+          try {
+            const res = await safeCommand({ cmd: "get_totp", id });
+            const item = document.querySelector(`.item[data-id="${String(id)}"]`);
+            const totp = item ? item.querySelector(`.totp[data-totp]`) : null;
+            if (!totp) return;
+
+            const codeEl = totp.querySelector("[data-code]");
+            const expEl = totp.querySelector("[data-exp]");
+            const ring = totp.querySelector(".ring");
+            const inner = totp.querySelector(".ring > div");
+
+            const expires = Number(res.expires_in || 0);
+            const deg = Math.max(0, Math.min(360, (expires / 30) * 360));
+            ring.style.setProperty("--deg", `${deg}deg`);
+            inner.textContent = String(expires).padStart(2, "0");
+            codeEl.textContent = res.totp || "------";
+            expEl.textContent = `Expires in ${expires}s`;
+          } catch (e) {
+            const msg = (e && e.device && e.device.message) || e.message || "error";
+            if (msg === "no_totp") {
+              const item = document.querySelector(`.item[data-id="${String(id)}"]`);
+              const totp = item ? item.querySelector(`.totp[data-totp]`) : null;
+              if (totp) totp.style.display = "none";
+              if (state.totpTimer) clearInterval(state.totpTimer);
+              state.totpTimer = null;
+              return;
+            }
+          }
+        };
+
+        await update();
+        state.totpTimer = setInterval(update, 1000);
+      }
+
+      async function refreshList() {
+        touch();
+        setStatus("unlocked", "");
+        const res = await safeCommand({ cmd: "list" });
+        state.credentials = Array.isArray(res.credentials) ? res.credentials : [];
+        renderList();
+      }
+
+      function escapeHtml(s) {
+        return String(s)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      // ---- CSV import ----
+
+      function parseCsv(text) {
+        const rows = [];
+        let i = 0;
+        let field = "";
+        let row = [];
+        let inQuotes = false;
+
+        const pushField = () => {
+          row.push(field);
+          field = "";
+        };
+        const pushRow = () => {
+          // Skip fully empty lines
+          if (row.length === 1 && row[0].trim() === "") {
+            row = [];
+            return;
+          }
+          rows.push(row);
+          row = [];
+        };
+
+        while (i < text.length) {
+          const c = text[i];
+          if (inQuotes) {
+            if (c === '"') {
+              if (text[i + 1] === '"') {
+                field += '"';
+                i += 2;
+                continue;
+              }
+              inQuotes = false;
+              i++;
+              continue;
+            }
+            field += c;
+            i++;
+            continue;
+          }
+
+          if (c === '"') {
+            inQuotes = true;
+            i++;
+            continue;
+          }
+          if (c === ",") {
+            pushField();
+            i++;
+            continue;
+          }
+          if (c === "\r") {
+            i++;
+            continue;
+          }
+          if (c === "\n") {
+            pushField();
+            pushRow();
+            i++;
+            continue;
+          }
+          field += c;
+          i++;
+        }
+
+        pushField();
+        pushRow();
+        return rows;
+      }
+
+      function detectCsvFormat(headers) {
+        const h = headers.map((x) => String(x || "").trim());
+        const set = new Set(h.map((x) => x.toLowerCase()));
+
+        const has = (...cols) => cols.every((c) => set.has(c.toLowerCase()));
+
+        if (has("name", "url", "username", "password")) return { name: "Chrome", kind: "chrome" };
+        if (has("url", "username", "password", "httpRealm")) return { name: "Firefox", kind: "firefox" };
+        if (has("name", "login_uri", "login_username", "login_password")) return { name: "Bitwarden", kind: "bitwarden" };
+        if (has("name", "url", "username", "password", "extra")) return { name: "LastPass", kind: "lastpass" };
+        return { name: "Unknown", kind: "unknown" };
+      }
+
+      function toCredObjects(rows) {
+        if (!rows.length) return { format: { name: "Empty", kind: "unknown" }, creds: [] };
+        const headers = rows[0];
+        const fmt = detectCsvFormat(headers);
+
+        const idx = {};
+        for (let i = 0; i < headers.length; i++) idx[String(headers[i]).trim().toLowerCase()] = i;
+
+        const get = (r, key) => {
+          const i = idx[String(key).trim().toLowerCase()];
+          if (i === undefined) return "";
+          return String(r[i] ?? "");
+        };
+
+        const creds = [];
+        for (const r of rows.slice(1)) {
+          if (!r || !r.length) continue;
+          let service = "";
+          let url = "";
+          let username = "";
+          let password = "";
+          let totp = "";
+
+          if (fmt.kind === "chrome") {
+            service = get(r, "name");
+            url = get(r, "url");
+            username = get(r, "username");
+            password = get(r, "password");
+          } else if (fmt.kind === "firefox") {
+            url = get(r, "url");
+            service = get(r, "httprealm") || url;
+            username = get(r, "username");
+            password = get(r, "password");
+          } else if (fmt.kind === "bitwarden") {
+            service = get(r, "name");
+            url = get(r, "login_uri");
+            username = get(r, "login_username");
+            password = get(r, "login_password");
+            totp = get(r, "login_totp");
+          } else if (fmt.kind === "lastpass") {
+            service = get(r, "name");
+            url = get(r, "url");
+            username = get(r, "username");
+            password = get(r, "password");
+          } else {
+            // Best-effort: try common columns
+            service = get(r, "name");
+            url = get(r, "url");
+            username = get(r, "username");
+            password = get(r, "password");
+          }
+
+          service = service.trim();
+          url = url.trim();
+          username = username.trim();
+          totp = totp.trim();
+
+          if (!service || !password) continue;
+          creds.push({
+            service,
+            url,
+            username,
+            password,
+            totp_secret: totp,
+            hid_mode: 1,
+            _selected: true,
+          });
+        }
+
+        return { format: fmt, creds };
+      }
+
+      function renderImportPreview(creds) {
+        const tb = el("import-preview");
+        tb.innerHTML = "";
+        let i = 0;
+        for (const c of creds) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td><input type="checkbox" data-i="${i}" ${c._selected ? "checked" : ""}></td>
+            <td>${escapeHtml(c.service)}</td>
+            <td>${escapeHtml(c.url || "")}</td>
+            <td>${escapeHtml(c.username || "")}</td>
+            <td>${escapeHtml("•".repeat(Math.min(12, (c.password || "").length || 0)) || "•")}</td>
+          `;
+          tb.appendChild(tr);
+          i++;
+        }
+
+        tb.onchange = (e) => {
+          const t = e.target;
+          if (!t || t.tagName !== "INPUT") return;
+          const idx = Number(t.getAttribute("data-i"));
+          if (Number.isFinite(idx) && creds[idx]) creds[idx]._selected = t.checked;
+          updateImportCount(creds);
+        };
+        updateImportCount(creds);
+      }
+
+      function updateImportCount(creds) {
+        const n = creds.filter((c) => c._selected).length;
+        el("import-count").textContent = `${n} selected`;
+      }
+
+      async function runImport(creds) {
+        const selected = creds.filter((c) => c._selected).map((c) => {
+          const { _selected, ...rest } = c;
+          return rest;
+        });
+        if (!selected.length) return;
+
+        const chunkSize = 6;
+        const total = selected.length;
+        let done = 0;
+
+        el("import-progress").value = 0;
+        setStatus("import", "");
+
+        while (done < total) {
+          const chunk = selected.slice(done, done + chunkSize);
+          await safeCommand({ cmd: "import", entries: chunk });
+          done += chunk.length;
+          el("import-progress").value = Math.round((done / total) * 100);
+          setStatus("import", `Imported ${done}/${total}...`);
+        }
+
+        setStatus("import", `Import complete: ${total} sent to device.`);
+        await refreshList();
+      }
+
+      // ---- Event wiring ----
+
+      el("btn-connect").addEventListener("click", async () => {
+        try {
+          await connectFlow();
+        } catch (e) {
+          setStatus("disconnected", String(e && e.message ? e.message : e));
+        }
+      });
+
+      el("btn-disconnect").addEventListener("click", async () => {
+        touch();
+        try {
+          if (state.serial) await state.serial.disconnect();
+        } catch {}
+        cleanupUnlocked();
+        setView("disconnected");
+      });
+
+      el("btn-unlock").addEventListener("click", async () => {
+        try {
+          await unlockFlow();
+        } catch (e) {
+          const dev = e && e.device;
+          if (dev && dev.message === "locked_out") {
+            setStatus("connected", `Locked out for ${Math.ceil((dev.lockout_ms_remaining || 0) / 1000)}s`);
+          } else if (dev && dev.message === "wrong_pin") {
+            setStatus("connected", `Wrong PIN (${dev.failed_attempts || 0}/${dev.max_attempts || 5})`);
+          } else {
+            setStatus("connected", String(e && e.message ? e.message : e));
+          }
+        }
+      });
+
+      el("pin").addEventListener("keydown", (e) => {
+        touch();
+        if (e.key === "Enter") el("btn-unlock").click();
+      });
+
+      el("btn-lock").addEventListener("click", async () => {
+        try {
+          await lockFlow();
+        } catch (e) {
+          setStatus("unlocked", String(e && e.message ? e.message : e));
+        }
+      });
+
+      el("btn-refresh").addEventListener("click", async () => {
+        try {
+          await refreshList();
+        } catch (e) {
+          setStatus("unlocked", String(e && e.message ? e.message : e));
+        }
+      });
+
+      el("search").addEventListener("input", () => {
+        touch();
+        renderList();
+      });
+
+      // Add modal
+      const addModal = el("modal-add");
+      el("btn-add").addEventListener("click", () => {
+        touch();
+        setStatus("add", "");
+        addModal.showModal();
+      });
+      el("add-close").addEventListener("click", () => addModal.close());
+      el("add-cancel").addEventListener("click", () => addModal.close());
+      el("add-save").addEventListener("click", async () => {
+        try {
+          touch();
+          setStatus("add", "");
+          const payload = {
+            cmd: "add",
+            service: el("add-service").value.trim(),
+            url: el("add-url").value.trim(),
+            username: el("add-username").value.trim(),
+            password: el("add-password").value,
+            totp_secret: el("add-totp").value.trim(),
+            hid_mode: Number(el("add-hid-mode").value),
+          };
+          await safeCommand(payload);
+          setStatus("unlocked", `Saved ${payload.service}`);
+          addModal.close();
+          await refreshList();
+        } catch (e) {
+          setStatus("add", String(e && e.message ? e.message : e));
+        }
+      });
+
+      // Import modal
+      const importModal = el("modal-import");
+      let importCreds = [];
+      el("btn-import").addEventListener("click", () => {
+        touch();
+        setStatus("import", "");
+        el("import-progress").value = 0;
+        el("import-preview").innerHTML = "";
+        el("import-file").value = "";
+        el("import-format").textContent = "";
+        el("import-count").textContent = "";
+        importCreds = [];
+        importModal.showModal();
+      });
+      el("import-close").addEventListener("click", () => importModal.close());
+      el("import-file").addEventListener("change", async () => {
+        touch();
+        setStatus("import", "");
+        const f = el("import-file").files && el("import-file").files[0];
+        if (!f) return;
+        const text = await f.text();
+        const rows = parseCsv(text);
+        const out = toCredObjects(rows);
+        importCreds = out.creds;
+        el("import-format").textContent = `Detected format: ${out.format.name} (${importCreds.length} entries)`;
+        renderImportPreview(importCreds);
+      });
+      el("import-select-all").addEventListener("click", () => {
+        touch();
+        for (const c of importCreds) c._selected = true;
+        renderImportPreview(importCreds);
+      });
+      el("import-deselect-all").addEventListener("click", () => {
+        touch();
+        for (const c of importCreds) c._selected = false;
+        renderImportPreview(importCreds);
+      });
+      el("import-run").addEventListener("click", async () => {
+        try {
+          touch();
+          await runImport(importCreds);
+        } catch (e) {
+          setStatus("import", String(e && e.message ? e.message : e));
+        }
+      });
+
+      // Auto-lock after 120s inactivity (UI-side)
+      const AUTO_LOCK_MS = 120000;
+      window.addEventListener("click", touch, { capture: true });
+      window.addEventListener("keydown", touch, { capture: true });
+      setInterval(async () => {
+        if (state.view !== "unlocked") return;
+        if (Date.now() - state.lastInteractionMs < AUTO_LOCK_MS) return;
+        try {
+          await lockFlow();
+        } catch {}
+      }, 1000);
+    </script>
+  </body>
+</html>

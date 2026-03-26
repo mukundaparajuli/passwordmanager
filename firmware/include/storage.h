@@ -6,7 +6,11 @@
 
 #include "crypto.h"
 
+static const int MAX_CREDENTIALS = 50;
+
 static const uint8_t CRED_FLAG_HAS_TOTP = 0x01;
+static const uint8_t CRED_FLAG_HID_MODE_SHIFT = 1;
+static const uint8_t CRED_FLAG_HID_MODE_MASK = 0x06;
 
 typedef struct {
     char service[32];

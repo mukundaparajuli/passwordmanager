@@ -1,0 +1,190 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VaultKey Options</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --panel: rgba(255, 255, 255, 0.08);
+        --text: rgba(255, 255, 255, 0.92);
+        --muted: rgba(255, 255, 255, 0.65);
+        --border: rgba(255, 255, 255, 0.14);
+        --accent: #6ea8fe;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 18px;
+        color: var(--text);
+        background: var(--bg);
+        font-family: var(--sans);
+      }
+      .wrap {
+        max-width: 760px;
+        margin: 0 auto;
+      }
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: var(--panel);
+        padding: 14px;
+      }
+      h1 {
+        font-size: 18px;
+        margin: 0 0 10px;
+      }
+      .row {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      label {
+        display: block;
+        font-size: 12px;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      input,
+      select,
+      button {
+        font: inherit;
+      }
+      select,
+      input[type="text"] {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(0, 0, 0, 0.2);
+        color: var(--text);
+      }
+      input[type="password"] {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(0, 0, 0, 0.2);
+        color: var(--text);
+      }
+      button {
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        padding: 8px 10px;
+        border-radius: 12px;
+        cursor: pointer;
+      }
+      button.primary {
+        border-color: rgba(110, 168, 254, 0.45);
+        background: rgba(110, 168, 254, 0.22);
+      }
+      button.danger {
+        border-color: rgba(255, 77, 77, 0.45);
+        background: rgba(255, 77, 77, 0.12);
+      }
+      .hidden { display: none; }
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+      .status {
+        margin-top: 10px;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      @media (min-width: 760px) {
+        .grid {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>VaultKey Options</h1>
+        <div class="muted">Settings apply to the extension UI. Device security rules still apply on the ESP32.</div>
+        <div style="height: 12px"></div>
+        <div class="row">
+          <button id="btn-connect" class="primary">Connect / Reconnect</button>
+          <button id="btn-test">Test Connection</button>
+        </div>
+        <div id="status" class="status"></div>
+        <div style="height: 12px"></div>
+        <div class="grid">
+          <div>
+            <label>Auto-lock timeout (extension)</label>
+            <select id="auto-lock">
+              <option value="30000">30s</option>
+              <option value="60000">60s</option>
+              <option value="120000" selected>120s</option>
+              <option value="0">Never</option>
+            </select>
+            <div class="muted" style="margin-top: 6px">
+              When the popup is unlocked and idle, it sends <span style="font-family: var(--mono)">{"cmd":"lock"}</span>.
+            </div>
+          </div>
+          <div>
+            <label>Default HID inject mode</label>
+            <select id="hid-mode">
+              <option value="0">Password only</option>
+              <option value="1" selected>Username + TAB + Password</option>
+              <option value="2">Username + TAB + Password + ENTER</option>
+            </select>
+            <div class="muted" style="margin-top: 6px">Used when saving captured credentials.</div>
+          </div>
+        </div>
+        <div style="height: 12px"></div>
+        <div class="row">
+          <button id="btn-save" class="primary">Save Settings</button>
+        </div>
+      </div>
+
+      <!-- Unlock Section -->
+      <div id="section-unlock" class="card hidden" style="margin-top: 14px">
+        <h1>Unlock Device</h1>
+        <div class="muted">Enter your 4–8 digit PIN. First unlock sets the PIN if unconfigured.</div>
+        <div style="height: 10px"></div>
+        <div class="row">
+          <input id="pin" type="password" inputmode="numeric" maxlength="8" placeholder="PIN (4–8 digits)" style="max-width: 220px" />
+          <button id="btn-unlock" class="primary">Unlock</button>
+          <button id="btn-disconnect" class="danger">Disconnect</button>
+        </div>
+      </div>
+
+      <!-- Vault Section -->
+      <div id="section-vault" class="card hidden" style="margin-top: 14px">
+        <div class="row" style="justify-content: space-between">
+          <h1>Vault</h1>
+          <div class="row">
+            <button id="btn-refresh">Refresh</button>
+            <button id="btn-lock" class="danger">Lock</button>
+          </div>
+        </div>
+        <div style="height: 6px"></div>
+        <input id="search" type="text" placeholder="Search credentials..." />
+        <div id="cred-list" style="margin-top: 10px"></div>
+      </div>
+
+    </div>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>
+

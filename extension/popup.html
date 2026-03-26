@@ -1,0 +1,248 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VaultKey</title>
+    <style>
+      :root {
+        --bg: #0b1020;
+        --panel: rgba(255, 255, 255, 0.08);
+        --text: rgba(255, 255, 255, 0.92);
+        --muted: rgba(255, 255, 255, 0.65);
+        --border: rgba(255, 255, 255, 0.14);
+        --accent: #6ea8fe;
+        --danger: #ff4d4d;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 12px;
+        width: 380px;
+        color: var(--text);
+        background: var(--bg);
+        font-family: var(--sans);
+      }
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--panel);
+        padding: 12px;
+      }
+      h1 {
+        font-size: 16px;
+        margin: 0 0 8px;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+      button {
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.08);
+        color: var(--text);
+        padding: 8px 10px;
+        border-radius: 12px;
+        cursor: pointer;
+      }
+      button.primary {
+        border-color: rgba(110, 168, 254, 0.45);
+        background: rgba(110, 168, 254, 0.22);
+      }
+      button.danger {
+        border-color: rgba(255, 77, 77, 0.45);
+        background: rgba(255, 77, 77, 0.12);
+      }
+      input[type="text"],
+      input[type="password"],
+      select {
+        width: 100%;
+        padding: 8px 10px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: rgba(0, 0, 0, 0.2);
+        color: var(--text);
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.35;
+      }
+      .status {
+        margin-top: 10px;
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 11px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .list {
+        display: grid;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .item {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 12px;
+        padding: 10px;
+        background: rgba(0, 0, 0, 0.18);
+      }
+      .item .svc {
+        font-weight: 650;
+        font-size: 13px;
+      }
+      .item .url {
+        color: var(--muted);
+        font-size: 11px;
+        word-break: break-word;
+        margin-top: 2px;
+      }
+      .badge {
+        display: inline-block;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 999px;
+        padding: 2px 8px;
+        font-size: 11px;
+        color: var(--muted);
+      }
+      .hr {
+        height: 1px;
+        background: rgba(255, 255, 255, 0.12);
+        margin: 10px 0;
+      }
+      .hidden {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <div class="row" style="justify-content: space-between">
+        <h1>VaultKey</h1>
+        <a href="options.html" target="_blank" class="badge" style="text-decoration: none; color: var(--muted)"
+          >Options</a
+        >
+      </div>
+      <div id="domain-indicator" class="muted"></div>
+
+      <div id="view-disconnected">
+        <div class="row">
+          <button id="btn-connect" class="primary">Connect</button>
+        </div>
+        <div class="muted" style="margin-top: 8px">WebSerial works only in this popup/options page (not in background).</div>
+      </div>
+
+      <div id="view-locked" class="hidden">
+        <div class="row">
+          <input id="pin" type="password" inputmode="numeric" maxlength="8" placeholder="PIN (4–8 digits)" />
+          <button id="btn-unlock" class="primary">Unlock</button>
+          <button id="btn-disconnect">Disconnect</button>
+        </div>
+        <div class="muted" style="margin-top: 8px">First unlock sets PIN if unconfigured.</div>
+      </div>
+
+      <div id="view-unlocked" class="hidden">
+        <div class="row">
+          <input id="search" type="text" placeholder="Search" />
+          <button id="btn-refresh">Refresh</button>
+        </div>
+        <div class="row" style="margin-top: 8px">
+          <button id="btn-lock" class="danger">Lock</button>
+          <button id="btn-clear-captured">Clear Captured</button>
+          <button id="btn-show-add">+ Add Credential</button>
+        </div>
+
+        <div id="add-box" class="hidden">
+          <div class="hr"></div>
+          <div class="muted" style="font-weight: 650">Add credential manually</div>
+          <div style="height: 6px"></div>
+          <div class="row" style="width: 100%">
+            <input id="add-service" type="text" placeholder="Service name (e.g. GitHub, WiFi, App)" />
+          </div>
+          <div style="height: 6px"></div>
+          <div class="row" style="width: 100%">
+            <input id="add-url" type="text" placeholder="URL / domain (optional)" />
+          </div>
+          <div style="height: 6px"></div>
+          <div class="row" style="width: 100%">
+            <input id="add-username" type="text" placeholder="Username / email" />
+          </div>
+          <div style="height: 6px"></div>
+          <div class="row" style="width: 100%">
+            <input id="add-password" type="password" placeholder="Password" />
+          </div>
+          <div style="height: 6px"></div>
+          <div class="row" style="width: 100%">
+            <input id="add-totp" type="text" placeholder="TOTP secret (optional)" />
+          </div>
+          <div style="height: 6px"></div>
+          <div class="row" style="width: 100%">
+            <select id="add-hid-mode">
+              <option value="0">Password only</option>
+              <option value="1" selected>Username + TAB + Password</option>
+              <option value="2">Username + TAB + Password + ENTER</option>
+            </select>
+          </div>
+          <div style="height: 8px"></div>
+          <div class="row">
+            <button id="btn-add-save" class="primary">Save to VaultKey</button>
+            <button id="btn-add-cancel">Cancel</button>
+          </div>
+        </div>
+
+        <div id="save-box" class="hidden">
+          <div class="hr"></div>
+          <div class="muted" style="font-weight: 650">Save captured credential</div>
+          <div style="height: 6px"></div>
+          <div class="row" style="width: 100%">
+            <input id="save-service" type="text" placeholder="Service" />
+          </div>
+          <div style="height: 6px"></div>
+          <div class="row" style="width: 100%">
+            <input id="save-url" type="text" placeholder="URL / domain" />
+          </div>
+          <div style="height: 6px"></div>
+          <div class="row" style="width: 100%">
+            <input id="save-username" type="text" placeholder="Username" />
+          </div>
+          <div style="height: 6px"></div>
+          <div class="row" style="width: 100%">
+            <input id="save-password" type="password" placeholder="Password" />
+          </div>
+          <div style="height: 6px"></div>
+          <div class="row" style="width: 100%">
+            <select id="save-hid-mode">
+              <option value="0">Password only</option>
+              <option value="1" selected>Username + TAB + Password</option>
+              <option value="2">Username + TAB + Password + ENTER</option>
+            </select>
+          </div>
+          <div style="height: 8px"></div>
+          <div class="row">
+            <button id="btn-save" class="primary">Save to VaultKey</button>
+          </div>
+        </div>
+
+        <div class="hr"></div>
+        <div class="muted">Click an entry to select it on device, then press CONFIRM twice (enter confirm screen, then type).</div>
+        <div id="list" class="list"></div>
+      </div>
+
+      <div id="status" class="status"></div>
+    </div>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
+
