@@ -64,7 +64,9 @@ static void typeSelectedViaHid(int id) {
 #endif
 
 void setup() {
+    delay(500); // Wait for USB to stabilize
     Serial.begin(115200); // USB CDC (WebSerial)
+    delay(100); // Give Serial time to initialize
 #if defined(VAULTKEY_ENABLE_USB_HID) && VAULTKEY_ENABLE_USB_HID
     Keyboard.begin();
     // When `ARDUINO_USB_MODE=0` (TinyUSB), USB is started automatically on boot
