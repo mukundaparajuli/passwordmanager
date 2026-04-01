@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include <string.h>
 
-#if defined(VAULTKEY_ENABLE_USB_HID) && VAULTKEY_ENABLE_USB_HID
 #if defined(__INTELLISENSE__) || defined(__clang__)
 #ifndef CONFIG_TINYUSB_ENABLED
 #define CONFIG_TINYUSB_ENABLED 1
@@ -14,7 +13,6 @@
 #include <USB.h>
 #include <USBHIDKeyboard.h>
 USBHIDKeyboard Keyboard;
-#endif
 
 #include "auth.h"
 #include "device_state.h"
@@ -23,29 +21,26 @@ USBHIDKeyboard Keyboard;
 #include "storage.h"
 #include "ui.h"
 
-#if defined(VAULTKEY_ENABLE_USB_HID) && VAULTKEY_ENABLE_USB_HID
 static uint8_t getHidModeFromFlags(uint8_t flags) {
     return (uint8_t)((flags & CRED_FLAG_HID_MODE_MASK) >> CRED_FLAG_HID_MODE_SHIFT);
 }
-#endif
 
-static bool selectedHasTotp(int id) {
-    const uint8_t *key = getEncryptionKey();
-    if (!key) return false;
-    credential_entry_t cred;
-    if (!getCredential(id, cred, key)) return false;
-    const bool has = strlen(cred.totp_secret) > 0;
-    memset(&cred, 0, sizeof(cred));
-    return has;
-}
-
-#if defined(VAULTKEY_ENABLE_USB_HID) && VAULTKEY_ENABLE_USB_HID
 static void typeSelectedViaHid(int id) {
+    // Serial.println("[HID] Starting HID type...");
     const uint8_t *key = getEncryptionKey();
-    if (!key) return;
+    if (!key) {
+        // Serial.println("[HID] ERROR: No encryption key");
+        return;
+    }
 
     credential_entry_t cred;
-    if (!getCredential(id, cred, key)) return;
+    if (!getCredential(id, cred, key)) {
+        // Serial.println("[HID] ERROR: Failed to get credential");
+        return;
+    }
+
+    // Serial.print("[HID] Got credential, mode: ");
+    // Serial.println(getHidModeFromFlags(cred.flags));
 
     const uint8_t mode = getHidModeFromFlags(cred.flags);
 
@@ -59,21 +54,19 @@ static void typeSelectedViaHid(int id) {
     }
 
     Keyboard.releaseAll();
+    // Serial.println("[HID] HID type complete");
     memset(&cred, 0, sizeof(cred));
 }
-#endif
 
 void setup() {
     delay(500); // Wait for USB to stabilize
     Serial.begin(115200); // USB CDC (WebSerial)
     delay(100); // Give Serial time to initialize
-#if defined(VAULTKEY_ENABLE_USB_HID) && VAULTKEY_ENABLE_USB_HID
     Keyboard.begin();
     // When `ARDUINO_USB_MODE=0` (TinyUSB), USB is started automatically on boot
     // when `ARDUINO_USB_CDC_ON_BOOT=1`. Starting it again can cause a disconnect.
 #if ARDUINO_USB_MODE
     USB.begin();
-#endif
 #endif
 
     authInit();
@@ -83,7 +76,7 @@ void setup() {
     serialProtocolInit();
 
     if (!uiInit()) {
-        Serial.println("[WARN] OLED init failed – running without display");
+        // Serial.println("[WARN] OLED init failed – running without display");
     } else {
         uiShowBootScreen();
     }
@@ -111,7 +104,8 @@ void loop() {
         lastCountMs = 0;
         lastAuth = authed;
     }
-
+    // Serial.print("[AUTH] Authenticated: ");
+    // Serial.println(authed);
     InputEvents ev;
     inputPoll(ev);
 
@@ -142,29 +136,22 @@ void loop() {
                 deviceSetSelectedIndex(selected);
                 deviceSetUiState(DeviceUiState::SELECTED);
             }
-
-            if (ev.confirm_long) {
-                if (selectedHasTotp(selected)) {
-                    deviceSetUiState(DeviceUiState::TOTP);
-                } else {
-                    deviceSetUiState(DeviceUiState::SELECTED);
-                }
-            }
-
-            if (ev.confirm_short) {
-#if defined(VAULTKEY_ENABLE_USB_HID) && VAULTKEY_ENABLE_USB_HID
+            Serial.println("here1");
+            Serial.println(ev.up_pressed);
+            Serial.println(ev.down_pressed);
+            Serial.println(ev.confirm_short);
+            if (ev.up_pressed || ev.down_pressed) {
+                Serial.println("here2");
+                Serial.println("[INPUT] Confirm short pressed");
                 const DeviceUiState state = deviceGetUiState();
-                if (state == DeviceUiState::CONFIRM_HID) {
+                Serial.print("[INPUT] Confirm pressed, state: ");
+                // Serial.println((int)state);
+                if (state == DeviceUiState::IDLE || state == DeviceUiState::SELECTED) {
+                    // Serial.print("[INPUT] Triggering HID for credential: ");
+                    // Serial.println(selected);
                     typeSelectedViaHid(selected);
-                    deviceSetUiState(DeviceUiState::SELECTED);
-                } else if (state == DeviceUiState::TOTP) {
-                    deviceSetUiState(DeviceUiState::SELECTED);
-                } else {
-                    deviceSetUiState(DeviceUiState::CONFIRM_HID);
+                    deviceSetUiState(DeviceUiState::IDLE);
                 }
-#else
-                deviceSetUiState(DeviceUiState::SELECTED);
-#endif
             }
         }
     }

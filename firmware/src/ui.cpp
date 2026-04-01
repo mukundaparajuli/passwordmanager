@@ -38,7 +38,7 @@ bool uiInit() {
     Wire.begin(OLED_SDA_PIN, OLED_SCL_PIN);
 
     if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-        Serial.println("[UI] OLED init failed");
+        // Serial.println("[UI] OLED init failed");
         return false;
     }
 
@@ -125,27 +125,6 @@ void uiRender(DeviceUiState state, int selectedId) {
         return;
     }
 
-    if (state == DeviceUiState::CONFIRM_HID) {
-        display.setTextSize(1);
-        display.setCursor(0, 0);
-#if defined(VAULTKEY_ENABLE_USB_HID) && VAULTKEY_ENABLE_USB_HID
-        display.println("Password:");
-        display.println();
-        display.println(svc.length() ? svc : "(unnamed)");
-        display.println();
-        display.println(ellipsize(cred.password, 21));
-        display.println();
-        display.println("CONFIRM: Type");
-#else
-        display.println("HID disabled");
-        display.println();
-        display.println("Rebuild for ESP32-S3");
-#endif
-        display.display();
-        memset(&cred, 0, sizeof(cred));
-        return;
-    }
-
     if (state == DeviceUiState::TOTP) {
         if (strlen(cred.totp_secret) == 0) {
             display.setTextSize(1);
@@ -216,8 +195,6 @@ void uiRender(DeviceUiState state, int selectedId) {
 
     display.setCursor(0, 44);
     display.println("CONFIRM: Type");
-    display.setCursor(0, 54);
-    display.println("Hold: TOTP");
 
     display.display();
     memset(&cred, 0, sizeof(cred));

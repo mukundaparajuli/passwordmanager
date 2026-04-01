@@ -76,26 +76,28 @@ void inputPoll(InputEvents &events) {
 
     bool confirmPressedEdge = false;
     bool confirmReleasedEdge = false;
-    const bool confirmHeld = pollButton(BTN_CONFIRM_PIN, confirmBtn, confirmPressedEdge, confirmReleasedEdge);
+    pollButton(BTN_CONFIRM_PIN, confirmBtn, confirmPressedEdge, confirmReleasedEdge);
+    if (confirmPressedEdge) events.confirm_short = true;
+    // const bool confirmHeld = pollButton(BTN_CONFIRM_PIN, confirmBtn, confirmPressedEdge, confirmReleasedEdge);
 
-    const uint32_t now = millis();
-    if (confirmPressedEdge) {
-        confirmPressStartMs = now;
-        confirmLongFired = false;
-    }
-
-    if (confirmHeld && !confirmLongFired && confirmPressStartMs != 0 &&
-        (uint32_t)(now - confirmPressStartMs) >= CONFIRM_LONG_MS) {
-        confirmLongFired = true;
-        events.confirm_long = true;
-    }
-
-    if (confirmReleasedEdge) {
-        if (!confirmLongFired && confirmPressStartMs != 0) {
-            events.confirm_short = true;
-        }
-        confirmPressStartMs = 0;
-        confirmLongFired = false;
-    }
+    // const uint32_t now = millis();
+    // if (confirmPressedEdge) {
+        // confirmPressStartMs = now;
+        // confirmLongFired = false;
+    // }
+// 
+    // if (confirmHeld && !confirmLongFired && confirmPressStartMs != 0 &&
+        // (uint32_t)(now - confirmPressStartMs) >= CONFIRM_LONG_MS) {
+        // confirmLongFired = true;
+        // events.confirm_long = true;
+    // }
+// 
+    // if (confirmReleasedEdge) {
+        // if (!confirmLongFired && confirmPressStartMs != 0) {
+            // events.confirm_short = true;
+        // }
+        // confirmPressStartMs = 0;
+        // confirmLongFired = false;
+    // }
 }
 

@@ -130,6 +130,9 @@ export class VaultKeySerial {
           const line = rawLine.trim();
           if (!line) continue;
 
+          // Skip non-JSON lines (debug output, etc.)
+          if (!line.startsWith('{') && !line.startsWith('[')) continue;
+
           let msg = null;
           try {
             msg = JSON.parse(line);

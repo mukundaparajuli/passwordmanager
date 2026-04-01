@@ -11,8 +11,8 @@
 #define OLED_RESET -1
 #define SCREEN_ADDRESS 0x3C
 
-#define BTN_UP_PIN 4
+#define BTN_UP_PIN 15
 #define BTN_DOWN_PIN 5
-#define BTN_CONFIRM_PIN 15
+#define BTN_CONFIRM_PIN 4
 
 #endif
