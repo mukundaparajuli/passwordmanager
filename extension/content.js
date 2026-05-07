@@ -32,9 +32,9 @@
   function injectAutofillButton(passwordField) {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.textContent = "Autofill with VaultKey";
+    btn.textContent = "Autofill";
     btn.style.cssText =
-      "margin-top:8px;padding:6px 10px;border-radius:10px;border:1px solid rgba(0,0,0,0.25);background:#f2f5ff;color:#1b243a;font-size:12px;cursor:pointer;";
+      "margin-top:8px;padding:7px 11px;border-radius:999px;border:1px solid rgba(17,24,39,0.12);background:#ffffff;color:#111827;font-size:12px;cursor:pointer;box-shadow:0 4px 14px rgba(17,24,39,0.08);";
     btn.addEventListener("click", () => {
       chrome.runtime.sendMessage({ type: "OPEN_POPUP", urlPath: `popup.html?mode=autofill&domain=${encodeURIComponent(domain)}` });
     });
@@ -70,4 +70,3 @@
     true
   );
 })();
-

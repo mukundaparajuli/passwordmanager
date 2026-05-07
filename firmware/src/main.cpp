@@ -26,21 +26,21 @@ static uint8_t getHidModeFromFlags(uint8_t flags) {
 }
 
 static void typeSelectedViaHid(int id) {
-    // Serial.println("[HID] Starting HID type...");
+    Serial.println("[HID] Starting HID type...");
     const uint8_t *key = getEncryptionKey();
     if (!key) {
-        // Serial.println("[HID] ERROR: No encryption key");
+        Serial.println("[HID] ERROR: No encryption key");
         return;
     }
 
     credential_entry_t cred;
     if (!getCredential(id, cred, key)) {
-        // Serial.println("[HID] ERROR: Failed to get credential");
+        Serial.println("[HID] ERROR: Failed to get credential");
         return;
     }
 
-    // Serial.print("[HID] Got credential, mode: ");
-    // Serial.println(getHidModeFromFlags(cred.flags));
+    Serial.print("[HID] Got credential, mode: ");
+    Serial.println(getHidModeFromFlags(cred.flags));
 
     const uint8_t mode = getHidModeFromFlags(cred.flags);
 
@@ -54,7 +54,7 @@ static void typeSelectedViaHid(int id) {
     }
 
     Keyboard.releaseAll();
-    // Serial.println("[HID] HID type complete");
+    Serial.println("[HID] HID type complete");
     memset(&cred, 0, sizeof(cred));
 }
 

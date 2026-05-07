@@ -3,16 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VaultKey</title>
+    <title>Passwords</title>
     <style>
       :root {
-        --bg: #0b1020;
-        --panel: rgba(255, 255, 255, 0.08);
-        --text: rgba(255, 255, 255, 0.92);
-        --muted: rgba(255, 255, 255, 0.65);
-        --border: rgba(255, 255, 255, 0.14);
-        --accent: #6ea8fe;
-        --danger: #ff4d4d;
+        --bg: #f3f1ec;
+        --panel: #ffffff;
+        --text: #1b1d20;
+        --muted: #6d7278;
+        --border: rgba(27, 29, 32, 0.08);
+        --accent-2: #1f2329;
+        --danger: #fbefef;
         --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       }
@@ -21,7 +21,7 @@
       }
       body {
         margin: 0;
-        padding: 12px;
+        padding: 14px;
         width: 380px;
         color: var(--text);
         background: var(--bg);
@@ -29,13 +29,10 @@
       }
       .card {
         border: 1px solid var(--border);
-        border-radius: 14px;
+        border-radius: 18px;
         background: var(--panel);
-        padding: 12px;
-      }
-      h1 {
-        font-size: 16px;
-        margin: 0 0 8px;
+        padding: 14px;
+        box-shadow: 0 12px 32px rgba(17, 24, 39, 0.08);
       }
       .row {
         display: flex;
@@ -50,29 +47,37 @@
       }
       button {
         border: 1px solid var(--border);
-        background: rgba(255, 255, 255, 0.08);
+        background: #f5f4f0;
         color: var(--text);
-        padding: 8px 10px;
+        padding: 9px 11px;
         border-radius: 12px;
         cursor: pointer;
       }
+      button:not(.primary):not(.danger):hover {
+        background: #eceae4;
+      }
       button.primary {
-        border-color: rgba(110, 168, 254, 0.45);
-        background: rgba(110, 168, 254, 0.22);
+        border-color: #1f2329;
+        background: var(--accent-2);
+        color: #ffffff;
       }
       button.danger {
-        border-color: rgba(255, 77, 77, 0.45);
-        background: rgba(255, 77, 77, 0.12);
+        border-color: rgba(177, 93, 93, 0.14);
+        background: var(--danger);
+        color: #8c4e4e;
       }
       input[type="text"],
       input[type="password"],
       select {
         width: 100%;
-        padding: 8px 10px;
+        padding: 9px 11px;
         border-radius: 12px;
         border: 1px solid var(--border);
-        background: rgba(0, 0, 0, 0.2);
+        background: #fbfaf7;
         color: var(--text);
+      }
+      input::placeholder {
+        color: #9aa0a6;
       }
       .muted {
         color: var(--muted);
@@ -93,10 +98,13 @@
         margin-top: 10px;
       }
       .item {
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        border-radius: 12px;
+        border: 1px solid rgba(27, 29, 32, 0.08);
+        border-radius: 14px;
         padding: 10px;
-        background: rgba(0, 0, 0, 0.18);
+        background: #faf9f6;
+      }
+      .item-actions {
+        margin-top: 8px;
       }
       .item .svc {
         font-weight: 650;
@@ -110,81 +118,127 @@
       }
       .badge {
         display: inline-block;
-        border: 1px solid rgba(255, 255, 255, 0.14);
+        border: 1px solid rgba(27, 29, 32, 0.08);
         border-radius: 999px;
-        padding: 2px 8px;
+        padding: 3px 8px;
         font-size: 11px;
         color: var(--muted);
+        background: #ffffff;
       }
       .hr {
         height: 1px;
-        background: rgba(255, 255, 255, 0.12);
+        background: rgba(27, 29, 32, 0.08);
         margin: 10px 0;
       }
       .hidden {
         display: none;
       }
+      .totp-panel {
+        margin-top: 8px;
+        padding: 10px;
+        border-radius: 12px;
+        border: 1px solid rgba(27, 29, 32, 0.08);
+        background: #ffffff;
+      }
+      .totp-code {
+        font-family: var(--mono);
+        font-size: 24px;
+        letter-spacing: 0.18em;
+        font-weight: 700;
+      }
+      .totp-meta {
+        color: var(--muted);
+        font-size: 11px;
+        margin-top: 4px;
+      }
+      .totp-error {
+        color: #a45a5a;
+      }
+      .topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      .ghost-link {
+        text-decoration: none;
+        color: var(--muted);
+        font-size: 12px;
+        padding: 4px 0;
+      }
+      .section-title {
+        font-size: 12px;
+        color: var(--muted);
+        font-weight: 650;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
     </style>
   </head>
   <body>
     <div class="card">
-      <div class="row" style="justify-content: space-between">
-        <h1>VaultKey</h1>
-        <a href="options.html" target="_blank" class="badge" style="text-decoration: none; color: var(--muted)"
-          >Options</a
-        >
+      <div class="topline">
+        <div id="domain-indicator" class="muted"></div>
+        <a href="options.html" target="_blank" class="ghost-link">Settings</a>
       </div>
-      <div id="domain-indicator" class="muted"></div>
 
       <div id="view-disconnected">
+        <div class="section-title">Connect</div>
+        <div style="height: 8px"></div>
         <div class="row">
           <button id="btn-connect" class="primary">Connect</button>
         </div>
-        <div class="muted" style="margin-top: 8px">WebSerial works only in this popup/options page (not in background).</div>
+        <div class="muted" style="margin-top: 8px">Use this page or Settings to open the device. Background pages cannot use WebSerial.</div>
       </div>
 
       <div id="view-locked" class="hidden">
+        <div class="section-title">Unlock</div>
+        <div style="height: 8px"></div>
         <div class="row">
           <input id="pin" type="password" inputmode="numeric" maxlength="8" placeholder="PIN (4–8 digits)" />
           <button id="btn-unlock" class="primary">Unlock</button>
           <button id="btn-disconnect">Disconnect</button>
         </div>
-        <div class="muted" style="margin-top: 8px">First unlock sets PIN if unconfigured.</div>
+        <div class="muted" style="margin-top: 8px">On a new device, the first successful unlock sets the PIN.</div>
       </div>
 
       <div id="view-unlocked" class="hidden">
+        <div class="section-title">Saved</div>
+        <div style="height: 8px"></div>
         <div class="row">
           <input id="search" type="text" placeholder="Search" />
           <button id="btn-refresh">Refresh</button>
         </div>
         <div class="row" style="margin-top: 8px">
           <button id="btn-lock" class="danger">Lock</button>
-          <button id="btn-clear-captured">Clear Captured</button>
-          <button id="btn-show-add">+ Add Credential</button>
+          <button id="btn-clear-captured">Clear Prompt</button>
+          <button id="btn-show-add">Add</button>
         </div>
 
         <div id="add-box" class="hidden">
           <div class="hr"></div>
-          <div class="muted" style="font-weight: 650">Add credential manually</div>
+          <div class="section-title">Add</div>
           <div style="height: 6px"></div>
           <div class="row" style="width: 100%">
-            <input id="add-service" type="text" placeholder="Service name (e.g. GitHub, WiFi, App)" />
+            <input id="add-service" type="text" placeholder="Service" />
           </div>
           <div style="height: 6px"></div>
           <div class="row" style="width: 100%">
-            <input id="add-url" type="text" placeholder="URL / domain (optional)" />
+            <input id="add-url" type="text" placeholder="URL or domain" />
           </div>
           <div style="height: 6px"></div>
           <div class="row" style="width: 100%">
-            <input id="add-username" type="text" placeholder="Username / email" />
+            <input id="add-username" type="text" placeholder="Username" />
           </div>
           <div style="height: 6px"></div>
           <div class="row" style="width: 100%">
             <input id="add-password" type="password" placeholder="Password" />
           </div>
           <div style="height: 6px"></div>
-          <div class="row" style="width: 100%">
-            <input id="add-totp" type="text" placeholder="TOTP secret (optional)" />
+          <div style="width: 100%">
+            <label style="font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px">TOTP Secret (optional)</label>
+            <input id="add-totp" type="text" placeholder="BASE32SECRET" />
           </div>
           <div style="height: 6px"></div>
           <div class="row" style="width: 100%">
@@ -196,14 +250,14 @@
           </div>
           <div style="height: 8px"></div>
           <div class="row">
-            <button id="btn-add-save" class="primary">Save to VaultKey</button>
+            <button id="btn-add-save" class="primary">Save</button>
             <button id="btn-add-cancel">Cancel</button>
           </div>
         </div>
 
         <div id="save-box" class="hidden">
           <div class="hr"></div>
-          <div class="muted" style="font-weight: 650">Save captured credential</div>
+          <div class="section-title">Save Prompt</div>
           <div style="height: 6px"></div>
           <div class="row" style="width: 100%">
             <input id="save-service" type="text" placeholder="Service" />
@@ -230,19 +284,17 @@
           </div>
           <div style="height: 8px"></div>
           <div class="row">
-            <button id="btn-save" class="primary">Save to VaultKey</button>
+            <button id="btn-save" class="primary">Save</button>
           </div>
         </div>
 
         <div class="hr"></div>
-        <div class="muted">Click an entry to select it on device, then press CONFIRM twice (enter confirm screen, then type).</div>
+        <div class="muted">Select sends the entry to the device. TOTP shows a live 6-digit code when a secret is stored.</div>
         <div id="list" class="list"></div>
       </div>
 
       <div id="status" class="status"></div>
     </div>
-
     <script type="module" src="popup.js"></script>
   </body>
 </html>
-

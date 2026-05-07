@@ -30,9 +30,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       await chrome.notifications.create(NOTIF_ID, {
         type: "basic",
         iconUrl: ICON_DATA_URL,
-        title: "VaultKey",
-        message: "Save this password to VaultKey?",
-        buttons: [{ title: "Save" }]
+        title: "Save login",
+        message: "Review and save this password.",
+        buttons: [{ title: "Open" }]
       });
 
       sendResponse({ ok: true });
@@ -68,4 +68,3 @@ chrome.notifications.onClicked.addListener(async (id) => {
   if (id !== NOTIF_ID) return;
   await openPopup("popup.html?mode=save");
 });
-

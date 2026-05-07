@@ -3,15 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VaultKey Options</title>
+    <title>Settings</title>
     <style>
       :root {
-        --bg: #0b1020;
-        --panel: rgba(255, 255, 255, 0.08);
-        --text: rgba(255, 255, 255, 0.92);
-        --muted: rgba(255, 255, 255, 0.65);
-        --border: rgba(255, 255, 255, 0.14);
-        --accent: #6ea8fe;
+        --bg: #f3f1ec;
+        --panel: #ffffff;
+        --text: #1b1d20;
+        --muted: #6d7278;
+        --border: rgba(27, 29, 32, 0.08);
         --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       }
@@ -31,9 +30,10 @@
       }
       .card {
         border: 1px solid var(--border);
-        border-radius: 16px;
+        border-radius: 18px;
         background: var(--panel);
         padding: 14px;
+        box-shadow: 0 12px 32px rgba(17, 24, 39, 0.08);
       }
       h1 {
         font-size: 18px;
@@ -62,7 +62,7 @@
         padding: 8px 10px;
         border-radius: 12px;
         border: 1px solid var(--border);
-        background: rgba(0, 0, 0, 0.2);
+        background: #fbfaf7;
         color: var(--text);
       }
       input[type="password"] {
@@ -70,24 +70,32 @@
         padding: 8px 10px;
         border-radius: 12px;
         border: 1px solid var(--border);
-        background: rgba(0, 0, 0, 0.2);
+        background: #fbfaf7;
         color: var(--text);
       }
       button {
         border: 1px solid var(--border);
-        background: rgba(255, 255, 255, 0.08);
+        background: #f5f4f0;
         color: var(--text);
         padding: 8px 10px;
         border-radius: 12px;
         cursor: pointer;
       }
       button.primary {
-        border-color: rgba(110, 168, 254, 0.45);
-        background: rgba(110, 168, 254, 0.22);
+        border-color: #1f2329;
+        background: #1f2329;
+        color: #ffffff;
       }
       button.danger {
-        border-color: rgba(255, 77, 77, 0.45);
-        background: rgba(255, 77, 77, 0.12);
+        border-color: rgba(177, 93, 93, 0.14);
+        background: #fbefef;
+        color: #8c4e4e;
+      }
+      button:hover {
+        background: #eceae4;
+      }
+      button.primary:hover {
+        background: #141820;
       }
       .hidden { display: none; }
       .muted {
@@ -112,54 +120,104 @@
         .grid {
           grid-template-columns: 1fr 1fr;
         }
+        #add-form.hidden ~ .subcard {
+          grid-column: 1 / -1;
+        }
+      }
+      .cred-item {
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border);
+      }
+      .cred-head {
+        display: flex;
+        gap: 12px;
+        align-items: start;
+        justify-content: space-between;
+      }
+      .cred-title {
+        font-weight: 650;
+        font-size: 14px;
+      }
+      .cred-sub {
+        margin-top: 2px;
+      }
+      .totp-panel {
+        margin-top: 10px;
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid rgba(27, 29, 32, 0.08);
+        background: #ffffff;
+      }
+      .totp-code {
+        font-family: var(--mono);
+        font-size: 30px;
+        letter-spacing: 0.18em;
+        font-weight: 700;
+      }
+      .totp-meta {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 6px;
+      }
+      .totp-error {
+        color: #a45a5a;
+      }
+      .subcard {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 12px;
+        background: #faf9f6;
+      }
+      .subhead {
+        font-size: 14px;
+        font-weight: 650;
+        margin: 0;
       }
     </style>
   </head>
   <body>
     <div class="wrap">
       <div class="card">
-        <h1>VaultKey Options</h1>
-        <div class="muted">Settings apply to the extension UI. Device security rules still apply on the ESP32.</div>
+        <h1>Settings</h1>
+        <div class="muted">Local extension settings only. Device rules still apply.</div>
         <div style="height: 12px"></div>
         <div class="row">
-          <button id="btn-connect" class="primary">Connect / Reconnect</button>
-          <button id="btn-test">Test Connection</button>
+          <button id="btn-connect" class="primary">Connect</button>
+          <button id="btn-test">Test</button>
         </div>
         <div id="status" class="status"></div>
         <div style="height: 12px"></div>
         <div class="grid">
           <div>
-            <label>Auto-lock timeout (extension)</label>
+            <label>Auto-lock</label>
             <select id="auto-lock">
               <option value="30000">30s</option>
               <option value="60000">60s</option>
               <option value="120000" selected>120s</option>
               <option value="0">Never</option>
             </select>
-            <div class="muted" style="margin-top: 6px">
-              When the popup is unlocked and idle, it sends <span style="font-family: var(--mono)">{"cmd":"lock"}</span>.
-            </div>
+            <div class="muted" style="margin-top: 6px">Applies to the popup when it is unlocked and idle.</div>
           </div>
           <div>
-            <label>Default HID inject mode</label>
+            <label>Default typing mode</label>
             <select id="hid-mode">
               <option value="0">Password only</option>
               <option value="1" selected>Username + TAB + Password</option>
               <option value="2">Username + TAB + Password + ENTER</option>
             </select>
-            <div class="muted" style="margin-top: 6px">Used when saving captured credentials.</div>
+            <div class="muted" style="margin-top: 6px">Used when saving new credentials.</div>
           </div>
         </div>
         <div style="height: 12px"></div>
         <div class="row">
-          <button id="btn-save" class="primary">Save Settings</button>
+          <button id="btn-save" class="primary">Save</button>
         </div>
       </div>
 
       <!-- Unlock Section -->
       <div id="section-unlock" class="card hidden" style="margin-top: 14px">
-        <h1>Unlock Device</h1>
-        <div class="muted">Enter your 4–8 digit PIN. First unlock sets the PIN if unconfigured.</div>
+        <h1>Unlock</h1>
+        <div class="muted">Enter the device PIN. On a new device, the first successful unlock sets it.</div>
         <div style="height: 10px"></div>
         <div class="row">
           <input id="pin" type="password" inputmode="numeric" maxlength="8" placeholder="PIN (4–8 digits)" style="max-width: 220px" />
@@ -171,15 +229,58 @@
       <!-- Vault Section -->
       <div id="section-vault" class="card hidden" style="margin-top: 14px">
         <div class="row" style="justify-content: space-between">
-          <h1>Vault</h1>
+          <h1>Saved</h1>
           <div class="row">
+            <button id="btn-add-toggle">+ Add Credential</button>
             <button id="btn-refresh">Refresh</button>
             <button id="btn-lock" class="danger">Lock</button>
           </div>
         </div>
-        <div style="height: 6px"></div>
-        <input id="search" type="text" placeholder="Search credentials..." />
-        <div id="cred-list" style="margin-top: 10px"></div>
+        <div class="grid" style="margin-top: 12px">
+          <div id="add-form" class="subcard hidden">
+            <div class="subhead">Add</div>
+            <div class="muted" style="margin-top: 6px">Add a saved login, with a TOTP secret if needed.</div>
+            <div style="height: 10px"></div>
+            <label for="add-service">Service</label>
+            <input id="add-service" type="text" placeholder="GitHub" />
+            <div style="height: 8px"></div>
+            <label for="add-url">URL / domain</label>
+            <input id="add-url" type="text" placeholder="https://github.com" />
+            <div style="height: 8px"></div>
+            <label for="add-username">Username</label>
+            <input id="add-username" type="text" placeholder="alice@example.com" />
+            <div style="height: 8px"></div>
+            <label for="add-password">Password</label>
+            <input id="add-password" type="password" placeholder="Password" />
+            <div style="height: 8px"></div>
+            <label for="add-totp">TOTP Secret (optional)</label>
+            <input id="add-totp" type="text" placeholder="BASE32SECRET" />
+            <div style="height: 8px"></div>
+            <label for="add-hid-mode">HID inject mode</label>
+            <select id="add-hid-mode">
+              <option value="0">Password only</option>
+              <option value="1" selected>Username + TAB + Password</option>
+              <option value="2">Username + TAB + Password + ENTER</option>
+            </select>
+            <div style="height: 10px"></div>
+            <div class="row">
+              <button id="btn-add" class="primary">Save</button>
+              <button id="btn-add-clear">Clear</button>
+            </div>
+            <div id="add-status" class="status"></div>
+          </div>
+
+          <div class="subcard">
+            <div class="subhead">Saved</div>
+            <div style="height: 10px"></div>
+            <div class="row" style="justify-content: space-between; margin-bottom: 10px">
+              <input id="search" type="text" placeholder="Search" style="flex: 1" />
+              <button id="btn-clear-all" class="danger" style="margin-left: 8px; white-space: nowrap">Clear All</button>
+            </div>
+            <div class="muted" style="margin-top: 8px">Open TOTP to show a live 6-digit code when a secret is stored.</div>
+            <div id="cred-list" style="margin-top: 10px"></div>
+          </div>
+        </div>
       </div>
 
     </div>
@@ -187,4 +288,3 @@
     <script type="module" src="options.js"></script>
   </body>
 </html>
-

@@ -184,6 +184,7 @@ bool handleList() {
         c["service"] = entry.service;
         c["url"] = entry.url;
         c["username"] = entry.username;
+        c["has_totp"] = (entry.flags & CRED_FLAG_HAS_TOTP) != 0;
 
         memset(&entry, 0, sizeof(entry));
         delay(0);
@@ -256,6 +257,41 @@ bool handleGetTotp(JsonObjectConst obj) {
     doc["totp"] = code;
     doc["expires_in"] = expiresIn;
     writeJsonLine(doc);
+    return true;
+}
+
+bool handleUpdateTotp(JsonObjectConst obj) {
+    if (!obj["id"].is<int>()) {
+        sendError("bad_request");
+        return true;
+    }
+
+    const uint8_t *key = getEncryptionKey();
+    if (!key) {
+        sendError("locked");
+        return true;
+    }
+
+    const int id = obj["id"].as<int>();
+    credential_entry_t entry;
+    if (!getCredential(id, entry, key)) {
+        sendError("not_found");
+        return true;
+    }
+
+    const char *totpSecret = obj["totp_secret"] | "";
+    copyTrunc(entry.totp_secret, sizeof(entry.totp_secret), totpSecret);
+    if (strlen(entry.totp_secret) > 0) entry.flags |= CRED_FLAG_HAS_TOTP;
+    else entry.flags &= (uint8_t)~CRED_FLAG_HAS_TOTP;
+
+    if (!updateCredential(id, entry, key)) {
+        memset(&entry, 0, sizeof(entry));
+        sendError("store_failed");
+        return true;
+    }
+
+    memset(&entry, 0, sizeof(entry));
+    sendOk();
     return true;
 }
 
@@ -453,6 +489,10 @@ void processLine(const char *line, size_t len) {
     }
     if (strcmp(cmd, "get_totp") == 0) {
         handleGetTotp(obj);
+        return;
+    }
+    if (strcmp(cmd, "update_totp") == 0) {
+        handleUpdateTotp(obj);
         return;
     }
     if (strcmp(cmd, "add") == 0) {
