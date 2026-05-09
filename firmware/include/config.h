@@ -11,8 +11,8 @@
 #define OLED_RESET -1
 #define SCREEN_ADDRESS 0x3C
 
-#define BTN_UP_PIN 15
-#define BTN_DOWN_PIN 5
-#define BTN_CONFIRM_PIN 4
+// Using only 2 buttons for navigation and selection
+#define BTN_NEXT_PIN 5      // Navigate to next credential
+#define BTN_CONFIRM_PIN 4   // Select/Confirm credential
 
 #endif

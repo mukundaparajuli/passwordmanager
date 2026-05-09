@@ -4,10 +4,8 @@
 #include <Arduino.h>
 
 struct InputEvents {
-    bool up_pressed = false;
-    bool down_pressed = false;
-    bool confirm_short = false;
-    bool confirm_long = false;
+    bool next_pressed = false;    // Navigate to next credential
+    bool confirm_pressed = false; // Select/confirm credential
 };
 
 void inputInit();

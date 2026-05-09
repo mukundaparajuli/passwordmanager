@@ -40,19 +40,45 @@ static void typeSelectedViaHid(int id) {
     }
 
     Serial.print("[HID] Got credential, mode: ");
-    Serial.println(getHidModeFromFlags(cred.flags));
-
     const uint8_t mode = getHidModeFromFlags(cred.flags);
+    Serial.println(mode);
+    
+    // Small delay to ensure HID is ready
+    delay(100);
+    
+    // Release any stuck keys before typing
+    Keyboard.releaseAll();
+    delay(50);
 
+    // Type credentials based on the selected HID mode
     if (mode == 0) {
+        // Mode 0: Password only
+        Serial.println("[HID] Typing password only");
         Keyboard.print(cred.password);
     } else {
-        if (strlen(cred.username) > 0) Keyboard.print(cred.username);
+        // Mode 1: Username + TAB + Password
+        // Mode 2: Username + TAB + Password + ENTER
+        if (strlen(cred.username) > 0) {
+            Serial.println("[HID] Typing username");
+            Keyboard.print(cred.username);
+            delay(50);
+        }
+        
+        Serial.println("[HID] Typing TAB");
         Keyboard.write(KEY_TAB);
+        delay(50);
+        
+        Serial.println("[HID] Typing password");
         Keyboard.print(cred.password);
-        if (mode == 2) Keyboard.write(KEY_RETURN);
+        delay(50);
+        
+        if (mode == 2) {
+            Serial.println("[HID] Typing RETURN");
+            Keyboard.write(KEY_RETURN);
+        }
     }
 
+    delay(50);
     Keyboard.releaseAll();
     Serial.println("[HID] HID type complete");
     memset(&cred, 0, sizeof(cred));
@@ -109,7 +135,7 @@ void loop() {
     InputEvents ev;
     inputPoll(ev);
 
-    if (authed && (ev.up_pressed || ev.down_pressed || ev.confirm_short || ev.confirm_long)) {
+    if (authed && (ev.next_pressed || ev.confirm_pressed)) {
         authRecordActivity();
     }
 
@@ -126,31 +152,26 @@ void loop() {
         if (count > 0) {
             int selected = deviceGetSelectedIndex();
 
-            if (ev.up_pressed) {
-                selected = (selected - 1 + count) % count;
-                deviceSetSelectedIndex(selected);
-                deviceSetUiState(DeviceUiState::SELECTED);
-            }
-            if (ev.down_pressed) {
+            // Navigate to next credential with BTN_NEXT_PIN (Pin 5)
+            if (ev.next_pressed) {
                 selected = (selected + 1) % count;
                 deviceSetSelectedIndex(selected);
                 deviceSetUiState(DeviceUiState::SELECTED);
+                Serial.print("[INPUT] Navigation - Selected credential: ");
+                Serial.println(selected);
             }
-            Serial.println("here1");
-            Serial.println(ev.up_pressed);
-            Serial.println(ev.down_pressed);
-            Serial.println(ev.confirm_short);
-            if (ev.up_pressed || ev.down_pressed) {
-                Serial.println("here2");
-                Serial.println("[INPUT] Confirm short pressed");
+
+            // Confirm and send HID with BTN_CONFIRM_PIN (Pin 4)
+            if (ev.confirm_pressed) {
                 const DeviceUiState state = deviceGetUiState();
-                Serial.print("[INPUT] Confirm pressed, state: ");
-                // Serial.println((int)state);
                 if (state == DeviceUiState::IDLE || state == DeviceUiState::SELECTED) {
-                    // Serial.print("[INPUT] Triggering HID for credential: ");
-                    // Serial.println(selected);
+                    Serial.print("[INPUT] Confirm pressed - Sending HID for credential: ");
+                    Serial.println(selected);
                     typeSelectedViaHid(selected);
                     deviceSetUiState(DeviceUiState::IDLE);
+                } else if (state == DeviceUiState::LOCKED) {
+                    // Go back if confirm is pressed in locked state (though this shouldn't happen)
+                    deviceSetUiState(DeviceUiState::LOCKED);
                 }
             }
         }
