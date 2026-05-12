@@ -2,6 +2,91 @@ const ICON_DATA_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMB/6XGZ0cAAAAASUVORK5CYII=";
 
 const NOTIF_ID = "vaultkey_save";
+const CTX_MENU_QR_TOTP = "vaultkey-save-totp-qr";
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, Math.min(i + chunk, bytes.length)));
+  }
+  return btoa(binary);
+}
+
+async function fetchImageAsDataUrl(srcUrl) {
+  const r = await fetch(srcUrl);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const buf = await r.arrayBuffer();
+  const ct = r.headers.get("content-type") || "image/png";
+  return `data:${ct};base64,${arrayBufferToBase64(buf)}`;
+}
+
+async function blobUrlToDataUrlInTab(tabId, srcUrl) {
+  const res = await chrome.scripting.executeScript({
+    target: { tabId },
+    func: (u) =>
+      fetch(u)
+        .then((r) => r.blob())
+        .then(
+          (blob) =>
+            new Promise((resolve, reject) => {
+              const fr = new FileReader();
+              fr.onload = () => resolve(fr.result);
+              fr.onerror = () => reject(new Error("read failed"));
+              fr.readAsDataURL(blob);
+            })
+        ),
+    args: [srcUrl]
+  });
+  const result = res && res[0] && res[0].result;
+  if (!result || typeof result !== "string") throw new Error("Could not read image from page.");
+  return result;
+}
+
+async function loadQrImageFromContext(info, tab) {
+  const srcUrl = info.srcUrl;
+  if (!srcUrl) throw new Error("No image URL.");
+  try {
+    return await fetchImageAsDataUrl(srcUrl);
+  } catch (e) {
+    if (tab && tab.id != null && String(srcUrl).startsWith("blob:")) {
+      try {
+        return await blobUrlToDataUrlInTab(tab.id, srcUrl);
+      } catch (_) {
+        throw e;
+      }
+    }
+    throw e;
+  }
+}
+
+function registerContextMenus() {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: CTX_MENU_QR_TOTP,
+      title: "Save QR as TOTP secret…",
+      contexts: ["image"]
+    });
+  });
+}
+
+chrome.runtime.onInstalled.addListener(() => registerContextMenus());
+registerContextMenus();
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId !== CTX_MENU_QR_TOTP) return;
+  (async () => {
+    try {
+      const dataUrl = await loadQrImageFromContext(info, tab);
+      await chrome.storage.session.set({ totpQrDataUrl: dataUrl, totpQrError: null });
+    } catch (e) {
+      const msg = String(e && e.message ? e.message : e);
+      await chrome.storage.session.set({ totpQrDataUrl: null, totpQrError: msg });
+    }
+    openExtensionPopupWindow("totp-qr.html");
+  })();
+});
 
 function domainLookupKeys(hostname) {
   const h = String(hostname || "")

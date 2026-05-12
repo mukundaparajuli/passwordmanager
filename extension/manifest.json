@@ -3,7 +3,7 @@
   "name": "Passwords",
   "version": "0.1.0",
   "description": "Minimal extension for saved logins and TOTP codes.",
-  "permissions": ["storage", "activeTab", "scripting", "notifications"],
+  "permissions": ["storage", "activeTab", "scripting", "notifications", "contextMenus"],
   "host_permissions": ["<all_urls>"],
   "web_accessible_resources": [
     {

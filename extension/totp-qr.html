@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>TOTP from QR</title>
+    <style>
+      :root {
+        --bg: #f3f1ec;
+        --panel: #ffffff;
+        --text: #1b1d20;
+        --muted: #6d7278;
+        --border: rgba(27, 29, 32, 0.08);
+        --accent: #1f2329;
+        --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 14px;
+        width: 400px;
+        min-height: 200px;
+        color: var(--text);
+        background: var(--bg);
+        font-family: var(--sans);
+      }
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: var(--panel);
+        padding: 14px;
+        box-shadow: 0 12px 32px rgba(17, 24, 39, 0.08);
+      }
+      h1 {
+        font-size: 16px;
+        font-weight: 650;
+        margin: 0 0 8px;
+      }
+      .muted {
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-top: 10px;
+      }
+      label {
+        font-size: 12px;
+        color: var(--muted);
+        display: block;
+        margin-bottom: 4px;
+      }
+      input,
+      select,
+      textarea,
+      button {
+        font: inherit;
+      }
+      input[type="text"],
+      input[type="password"],
+      select,
+      textarea {
+        width: 100%;
+        padding: 9px 11px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: #fbfaf7;
+        color: var(--text);
+      }
+      textarea {
+        min-height: 72px;
+        resize: vertical;
+        font-family: var(--mono);
+        font-size: 11px;
+      }
+      button {
+        border: 1px solid var(--border);
+        background: #f5f4f0;
+        color: var(--text);
+        padding: 9px 11px;
+        border-radius: 12px;
+        cursor: pointer;
+      }
+      button.primary {
+        border-color: var(--accent);
+        background: var(--accent);
+        color: #fff;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .preview {
+        max-width: 100%;
+        max-height: 120px;
+        border-radius: 10px;
+        border: 1px solid var(--border);
+        margin-top: 8px;
+      }
+      .status {
+        margin-top: 10px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .err {
+        color: #a45a5a;
+      }
+      .toplinks {
+        text-align: right;
+        margin-bottom: 8px;
+      }
+      .toplinks a {
+        color: var(--muted);
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toplinks">
+      <a href="popup.html" target="_blank">Open vault</a>
+      ·
+      <a href="options.html" target="_blank">Settings</a>
+    </div>
+    <div class="card">
+      <h1>TOTP from QR image</h1>
+      <p class="muted" id="intro">
+        Connect your device, pick the login to attach this secret to, then save.
+      </p>
+
+      <div id="pre-connect-extras">
+        <p class="muted" id="pre-connect-msg"></p>
+        <label for="manual-paste">otpauth URL or Base32 secret (optional if QR decodes)</label>
+        <textarea id="manual-paste" placeholder="otpauth://totp/…"></textarea>
+      </div>
+
+      <div id="view-disconnected">
+        <div class="row">
+          <button type="button" id="btn-connect" class="primary">Connect device</button>
+        </div>
+        <p class="muted">WebSerial only works in this extension window.</p>
+      </div>
+
+      <div id="view-locked" class="hidden">
+        <label for="pin">PIN</label>
+        <div class="row">
+          <input id="pin" type="password" inputmode="numeric" maxlength="8" placeholder="4–8 digits" />
+          <button type="button" id="btn-unlock" class="primary">Unlock</button>
+        </div>
+      </div>
+
+      <div id="view-import" class="hidden">
+        <img id="qr-preview" class="preview hidden" alt="QR preview" />
+        <p class="muted" id="decode-hint"></p>
+        <label for="manual-tweak">Paste / fix otpauth or Base32 (optional)</label>
+        <textarea id="manual-tweak" placeholder="Override if QR text was wrong"></textarea>
+        <label for="field-secret">Secret (Base32)</label>
+        <input id="field-secret" type="text" autocomplete="off" spellcheck="false" />
+        <p class="muted" id="issuer-line"></p>
+        <label for="field-cred">Save to credential</label>
+        <select id="field-cred"></select>
+        <div class="row" style="margin-top: 12px">
+          <button type="button" id="btn-save" class="primary">Save TOTP to device</button>
+          <button type="button" id="btn-close">Done</button>
+        </div>
+      </div>
+
+      <div id="status" class="status"></div>
+    </div>
+    <script src="jsQR.min.js"></script>
+    <script type="module" src="totp-qr.js"></script>
+  </body>
+</html>
