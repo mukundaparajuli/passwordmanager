@@ -247,6 +247,49 @@
       .menu-item.danger:hover {
         background: var(--danger);
       }
+      .autofill-banner {
+        margin-bottom: 10px;
+        border-radius: 14px;
+        border: 1px solid rgba(31, 90, 170, 0.18);
+        background: linear-gradient(135deg, #e8f0ff 0%, #f6f9ff 100%);
+        overflow: hidden;
+      }
+      .autofill-banner-inner {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px 12px;
+      }
+      .autofill-banner-title {
+        font-weight: 650;
+        font-size: 13px;
+        color: var(--text);
+      }
+      .autofill-banner-sub {
+        font-size: 11px;
+        margin-top: 4px;
+        line-height: 1.4;
+      }
+      .autofill-banner-dismiss {
+        flex-shrink: 0;
+        border: none;
+        background: transparent;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1;
+        padding: 2px 6px;
+        cursor: pointer;
+        border-radius: 8px;
+      }
+      .autofill-banner-dismiss:hover {
+        background: rgba(31, 35, 41, 0.06);
+        color: var(--text);
+      }
+      .item.item-autofill-match {
+        border-color: rgba(31, 90, 170, 0.28);
+        background: #f0f5ff;
+        box-shadow: 0 0 0 1px rgba(31, 90, 170, 0.08);
+      }
     </style>
   </head>
   <body>
@@ -279,6 +322,15 @@
       <div id="view-unlocked" class="hidden">
         <div class="section-title">Saved</div>
         <div style="height: 8px"></div>
+        <div id="autofill-banner" class="autofill-banner hidden" role="status">
+          <div class="autofill-banner-inner">
+            <div class="autofill-banner-copy">
+              <div id="autofill-banner-title" class="autofill-banner-title">Autofill this site</div>
+              <div id="autofill-banner-sub" class="autofill-banner-sub muted"></div>
+            </div>
+            <button type="button" id="autofill-banner-dismiss" class="autofill-banner-dismiss" aria-label="Dismiss">×</button>
+          </div>
+        </div>
         <div class="row">
           <input id="search" type="text" placeholder="Search" />
           <button id="btn-refresh">Refresh</button>
@@ -367,6 +419,7 @@
 
       <div id="status" class="status"></div>
     </div>
+    <script src="icons.js"></script>
     <script type="module" src="popup.js"></script>
   </body>
 </html>

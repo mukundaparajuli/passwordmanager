@@ -5,6 +5,12 @@
   "description": "Minimal extension for saved logins and TOTP codes.",
   "permissions": ["storage", "activeTab", "scripting", "notifications"],
   "host_permissions": ["<all_urls>"],
+  "web_accessible_resources": [
+    {
+      "resources": ["popup.html"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "background": { "service_worker": "background.js" },
   "content_scripts": [
     {

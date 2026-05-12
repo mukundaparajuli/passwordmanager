@@ -1,5 +1,7 @@
 import { VaultKeySerial } from "./serial.js";
-import Icons from "./icons.js";
+
+// Icons is loaded globally by icons.js in manifest
+// Access it as window.Icons in the code
 
 const el = (id) => document.getElementById(id);
 
@@ -16,8 +18,48 @@ const state = {
   totpTimer: null,
   totpPending: false,
   totpDisplay: { code: "------", meta: "Open TOTP to load a code.", error: "" },
-  openMenuId: null
+  openMenuId: null,
+  initializationStarted: false
 };
+
+let autofillBannerDismissed = false;
+
+function domainLookupKeys(hostname) {
+  const h = String(hostname || "")
+    .trim()
+    .toLowerCase();
+  if (!h) return [];
+  const keys = [h];
+  if (h.startsWith("www.")) keys.push(h.slice(4));
+  else keys.push(`www.${h}`);
+  return keys;
+}
+
+function domainMapEntryForHost(hostname, domainMap) {
+  if (!domainMap || typeof domainMap !== "object") return null;
+  for (const k of domainLookupKeys(hostname)) {
+    const row = domainMap[k];
+    if (row && typeof row === "object") return row;
+  }
+  return null;
+}
+
+function credHostVariants(credHost) {
+  const h = String(credHost || "").toLowerCase();
+  if (!h) return [];
+  const s = new Set([h]);
+  if (h.startsWith("www.")) s.add(h.slice(4));
+  else s.add(`www.${h}`);
+  return [...s];
+}
+
+function credMatchesPageDomain(c, pageDomain) {
+  if (!pageDomain) return false;
+  const credHost = hostFromUrl(c.url || "").toLowerCase();
+  if (!credHost) return false;
+  const targets = new Set(domainLookupKeys(pageDomain));
+  return credHostVariants(credHost).some((h) => targets.has(h));
+}
 
 function clearTotpTimer() {
   if (state.totpTimer) clearInterval(state.totpTimer);
@@ -59,9 +101,21 @@ function setStatus(msg) {
 }
 
 function setView(which) {
-  el("view-disconnected").classList.toggle("hidden", which !== "disconnected");
-  el("view-locked").classList.toggle("hidden", which !== "locked");
-  el("view-unlocked").classList.toggle("hidden", which !== "unlocked");
+  console.log("[VaultKey-Popup] setView called with:", which);
+  const dv = el("view-disconnected");
+  const lv = el("view-locked");
+  const uv = el("view-unlocked");
+  console.log("[VaultKey-Popup] Elements found:", { dv: !!dv, lv: !!lv, uv: !!uv });
+  
+  dv.classList.toggle("hidden", which !== "disconnected");
+  lv.classList.toggle("hidden", which !== "locked");
+  uv.classList.toggle("hidden", which !== "unlocked");
+  
+  console.log("[VaultKey-Popup] After setView - classes:", {
+    disconnected: dv.className,
+    locked: lv.className,
+    unlocked: uv.className
+  });
 }
 
 function parseQuery() {
@@ -99,10 +153,101 @@ async function safeCommand(cmdObj) {
   return res;
 }
 
+async function initializePopup() {
+  // Prevent double initialization
+  if (state.initializationStarted) {
+    console.log("[VaultKey-Popup] Initialization already started, skipping");
+    return;
+  }
+  state.initializationStarted = true;
+  
+  // Check if device was recently unlocked (use local storage for persistence across popup instances)
+  const { deviceUnlockedAt: savedTime, deviceUnlockedExpiry } = await chrome.storage.local.get({ deviceUnlockedAt: 0, deviceUnlockedExpiry: 0 });
+  const now = Date.now();
+  
+  console.log("[VaultKey-Popup] Init check - savedTime:", savedTime, "expiry:", deviceUnlockedExpiry, "now:", now);
+  
+  // Clean up expired unlock
+  if (deviceUnlockedExpiry && now > deviceUnlockedExpiry) {
+    console.log("[VaultKey-Popup] Unlock expired, clearing");
+    await chrome.storage.local.set({ deviceUnlockedAt: 0, deviceUnlockedExpiry: 0 });
+  } else if (savedTime && now <= deviceUnlockedExpiry) {
+    console.log("[VaultKey-Popup] Unlock still valid");
+  }
+  
+  if (savedTime && deviceUnlockedExpiry && now <= deviceUnlockedExpiry) {
+    console.log("[VaultKey-Popup] Device was recently unlocked, trying to auto-connect");
+    // Try to connect and show credentials without asking for PIN
+    try {
+      state.serial = new VaultKeySerial();
+      state.serial.onDisconnect(() => {
+        console.log("[VaultKey-Popup] Device disconnected! (onDisconnect callback fired)");
+        stopTotpLoop();
+        closeTotpEditor();
+        state.serial = null;
+        state.unlocked = false;
+        state.creds = [];
+        chrome.storage.local.set({ deviceUnlockedAt: 0, deviceUnlockedExpiry: 0 });
+        setView("disconnected");
+        setStatus("Device disconnected.");
+      });
+
+      // Auto-connect with previously selected port
+      console.log("[VaultKey-Popup] Attempting auto-connect...");
+      await state.serial.connect({ auto: true });
+      console.log("[VaultKey-Popup] Connected successfully");
+
+      // Try to fetch credentials
+      try {
+        const res = await safeCommand({ cmd: "list" });
+        state.creds = Array.isArray(res.credentials) ? res.credentials : [];
+        state.unlocked = true;
+        console.log("[VaultKey-Popup] Device unlocked! Credentials:", state.creds.length);
+        
+        renderList();
+        setView("unlocked");
+        setStatus("Connected and unlocked.");
+        
+        try {
+          await updateDomainIndicator();
+        } catch (domainErr) {
+          console.error("[VaultKey-Popup] updateDomainIndicator failed:", domainErr);
+        }
+        console.log("[VaultKey-Popup] Initialization complete (from session)!");
+        return;
+      } catch (e) {
+        // Device is locked or timeout, fall through to normal connect flow
+        console.log("[VaultKey-Popup] Device not responding or locked:", e.message);
+        setView("locked");
+        setStatus("Connected. Enter PIN to unlock.");
+        return;
+      }
+    } catch (e) {
+      console.log("[VaultKey-Popup] Could not auto-connect:", e.message);
+      // Fall through to normal flow
+    }
+  } else {
+    console.log("[VaultKey-Popup] No valid unlock found - showing connect button");
+  }
+  
+  // Normal initialization flow - show connect button
+  console.log("[VaultKey-Popup] Starting normal initialization");
+  setView("disconnected");
+}
+
 async function connect() {
   setStatus("");
+  console.log("[VaultKey-Popup] connect() called");
+  // If already connected, just show locked view
+  if (state.serial) {
+    console.log("[VaultKey-Popup] Already connected");
+    setView("locked");
+    setStatus("Already connected.");
+    return;
+  }
   state.serial = new VaultKeySerial();
   state.serial.onDisconnect(() => {
+    console.log("[VaultKey-Popup] Device disconnected from connect() handler");
     stopTotpLoop();
     closeTotpEditor();
     state.serial = null;
@@ -112,14 +257,19 @@ async function connect() {
     setStatus("Disconnected.");
   });
   try {
+    console.log("[VaultKey-Popup] Attempting to connect...");
     await state.serial.connect({ auto: true });
+    console.log("[VaultKey-Popup] Connected successfully");
   } catch (e) {
+    console.error("[VaultKey-Popup] Connect error:", e.message);
     // requestPort fails in popup context — guide user to Options page
     if (e && e.message && e.message.includes("No port selected")) {
       state.serial = null;
       setStatus("No device selected yet. Open Settings once, choose the port, then return here.");
       return;
     }
+    // Clean up on connection error
+    state.serial = null;
     throw e;
   }
   await safeCommand({ cmd: "ping" });
@@ -135,6 +285,7 @@ async function disconnect() {
   state.serial = null;
   state.unlocked = false;
   state.creds = [];
+  await chrome.storage.local.set({ deviceUnlockedAt: 0, deviceUnlockedExpiry: 0 });
   setView("disconnected");
   setStatus("");
 }
@@ -148,6 +299,13 @@ async function unlock() {
   } catch {}
   el("pin").value = "";
   state.unlocked = true;
+  
+  // Remember that device was unlocked (30 min timeout)
+  const now = Date.now();
+  const expiry = now + 30 * 60 * 1000; // 30 minutes from now
+  await chrome.storage.local.set({ deviceUnlockedAt: now, deviceUnlockedExpiry: expiry });
+  console.log("[VaultKey-Popup] Device unlocked, saved until:", new Date(expiry));
+  
   setView("unlocked");
   await refresh();
   setStatus("Unlocked.");
@@ -175,7 +333,11 @@ async function refresh() {
   const domainMap = {};
   for (const c of state.creds) {
     const h = hostFromUrl(c.url || "");
-    if (h) domainMap[h] = { id: c.id, service: c.service || "", username: c.username || "" };
+    if (!h) continue;
+    const entry = { id: c.id, service: c.service || "", username: c.username || "" };
+    domainMap[h] = entry;
+    const alt = h.startsWith("www.") ? h.slice(4) : `www.${h}`;
+    domainMap[alt] = entry;
   }
   await chrome.storage.local.set({ domainMap });
 
@@ -199,19 +361,61 @@ async function updateDomainIndicator() {
     return;
   }
   const { domainMap } = await chrome.storage.local.get({ domainMap: {} });
-  if (domainMap && domainMap[domain]) {
-    el("domain-indicator").textContent = `Saved for ${domain}`;
+  const row = domainMapEntryForHost(domain, domainMap);
+  if (row) {
+    el("domain-indicator").textContent = row.service
+      ? `Saved login · ${row.service}`
+      : `Saved login for ${domain}`;
   } else {
     el("domain-indicator").textContent = `No saved login for ${domain}`;
   }
 }
 
+function syncAutofillBanner() {
+  const banner = el("autofill-banner");
+  const titleEl = el("autofill-banner-title");
+  const subEl = el("autofill-banner-sub");
+  if (!banner || !titleEl || !subEl) return;
+
+  if (state.unlocked) {
+    el("search").placeholder =
+      state.mode === "autofill" && state.domain ? "Type to search all sites…" : "Search";
+  }
+
+  if (state.mode !== "autofill" || !state.domain || !state.unlocked) {
+    banner.classList.add("hidden");
+    return;
+  }
+  if (autofillBannerDismissed) {
+    banner.classList.add("hidden");
+    return;
+  }
+
+  const hasMatch = state.creds.some((c) => credMatchesPageDomain(c, state.domain));
+  if (hasMatch) {
+    titleEl.textContent = "Autofill this site";
+    subEl.textContent =
+      "Tap Autofill on the highlighted login, then confirm twice on your device to type username and password.";
+  } else {
+    titleEl.textContent = "No saved login for this tab";
+    subEl.textContent =
+      "Sign in once, then save from this extension, or add the site manually under Add.";
+  }
+  banner.classList.remove("hidden");
+}
+
 function renderList() {
   const q = (el("search").value || "").trim().toLowerCase();
+  const searchEmpty = !q;
   const list = el("list");
   list.innerHTML = "";
 
-  const filtered = state.creds.filter((c) => {
+  let pool = state.creds;
+  if (state.mode === "autofill" && state.domain && searchEmpty) {
+    pool = state.creds.filter((c) => credMatchesPageDomain(c, state.domain));
+  }
+
+  const filtered = pool.filter((c) => {
     if (!q) return true;
     return (
       (c.service || "").toLowerCase().includes(q) ||
@@ -228,7 +432,13 @@ function renderList() {
   }
 
   if (filtered.length === 0) {
-    list.innerHTML = '<div class="muted">No credentials found.</div>';
+    if (state.mode === "autofill" && state.domain && searchEmpty && state.creds.length > 0) {
+      list.innerHTML =
+        '<div class="muted">Nothing saved for this site yet. Use Search to pick another login, or add this site with Add.</div>';
+    } else {
+      list.innerHTML = '<div class="muted">No credentials found.</div>';
+    }
+    syncAutofillBanner();
     return;
   }
 
@@ -237,8 +447,9 @@ function renderList() {
     const editOpen = state.editTotpId === c.id;
     const metaClass = state.totpDisplay.error ? "totp-meta totp-error" : "totp-meta";
     const menuOpen = state.openMenuId === c.id;
+    const isAutofillMatch = state.mode === "autofill" && state.domain && credMatchesPageDomain(c, state.domain);
     const item = document.createElement("div");
-    item.className = "item";
+    item.className = isAutofillMatch ? "item item-autofill-match" : "item";
     item.dataset.id = String(c.id);
     
     // Main item content with minimalistic design
@@ -280,12 +491,18 @@ function renderList() {
     menuButton.setAttribute("aria-label", "More options");
     
     // Menu icon using utility
-    const menuIcon = Icons.createIconSync("menu", {
-      width: "20",
-      height: "20",
-      style: "pointer-events: none;"
-    });
-    
+    let menuIcon = null;
+    try {
+      if (window.Icons && window.Icons.createIconSync) {
+        menuIcon = window.Icons.createIconSync("menu", {
+          width: "20",
+          height: "20",
+          style: "pointer-events: none;"
+        });
+      }
+    } catch (e) {
+      console.error("[VaultKey-Popup] Failed to create menu icon:", e);
+    }
     if (menuIcon) menuButton.appendChild(menuIcon);
     menuContainer.appendChild(menuButton);
     menuContainer.appendChild(menuDropdown);
@@ -296,7 +513,7 @@ function renderList() {
     // Select button as primary action
     const selectBtn = document.createElement("button");
     selectBtn.className = "primary";
-    selectBtn.textContent = "Select";
+    selectBtn.textContent = isAutofillMatch ? "Autofill" : "Select";
     selectBtn.setAttribute("data-act", "select");
     const selectRow = document.createElement("div");
     selectRow.className = "row";
@@ -392,6 +609,12 @@ function renderList() {
     }
 
     list.appendChild(item);
+  }
+
+  syncAutofillBanner();
+  const firstMatch = list.querySelector(".item-autofill-match");
+  if (firstMatch && state.mode === "autofill" && state.domain) {
+    requestAnimationFrame(() => firstMatch.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   }
 }
 
@@ -595,7 +818,15 @@ setInterval(async () => {
 // Wiring
 parseQuery();
 await loadSettings();
+await initializePopup();
 el("search").addEventListener("input", renderList);
+const autofillDismissBtn = el("autofill-banner-dismiss");
+if (autofillDismissBtn) {
+  autofillDismissBtn.addEventListener("click", () => {
+    autofillBannerDismissed = true;
+    syncAutofillBanner();
+  });
+}
 
 // Close menu when clicking outside
 document.addEventListener("click", (e) => {
@@ -619,6 +850,7 @@ el("btn-lock").addEventListener("click", async () => {
   stopTotpLoop();
   closeTotpEditor();
   state.unlocked = false;
+  await chrome.storage.local.set({ deviceUnlockedAt: 0, deviceUnlockedExpiry: 0 });
   setView("locked");
   setStatus("Locked.");
 });
@@ -628,9 +860,6 @@ el("btn-show-add").addEventListener("click", showAddForm);
 el("btn-add-cancel").addEventListener("click", hideAddForm);
 el("btn-add-save").addEventListener("click", () => saveManual().catch(e => setStatus(String(e && e.message ? e.message : e))));
 
-// Bootstrap
-setView("disconnected");
+// Bootstrap (view already set by initializePopup — do not reset it here)
 await loadCaptured();
 await updateDomainIndicator();
-
-// If launched explicitly for save/autofill, still requires user to click Connect.

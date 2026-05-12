@@ -119,7 +119,10 @@ export class VaultKeySerial {
     try {
       while (true) {
         const { value, done } = await this.reader.read();
-        if (done) break;
+        if (done) {
+          console.log("[VaultKey-Serial] Read loop ended (done=true)");
+          break;
+        }
         this.buf += this.decoder.decode(value, { stream: true });
 
         while (true) {
@@ -147,9 +150,11 @@ export class VaultKeySerial {
           if (w) w.resolve(msg);
         }
       }
-    } catch {
+    } catch (err) {
+      console.error("[VaultKey-Serial] Read loop error:", err);
       // Fall through to disconnect handler
     }
+    console.log("[VaultKey-Serial] Calling _handleDisconnect from _readLoop");
     this._handleDisconnect();
   }
 }

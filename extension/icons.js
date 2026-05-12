@@ -18,6 +18,11 @@ const Icons = (() => {
     "chevron-right": `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <polyline points="9 18 15 12 9 6"></polyline>
     </svg>`,
+    key: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="7.5" cy="15.5" r="5.5"></circle>
+      <path d="m21 2-9.6 9.6"></path>
+      <path d="m15.5 7.5 3 3L22 7l-3-3"></path>
+    </svg>`,
     menu: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
       <circle cx="12" cy="5" r="2"></circle>
       <circle cx="12" cy="12" r="2"></circle>
@@ -84,8 +89,8 @@ const Icons = (() => {
   };
 })();
 
-// Make Icons available globally for content scripts
-window.Icons = Icons;
-
-// Export for ES module import (popup.js)
+// Export as ES6 module
 export default Icons;
+
+// Also make Icons available globally for content scripts and non-module contexts
+window.Icons = Icons;

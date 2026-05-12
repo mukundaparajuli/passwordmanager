@@ -3,17 +3,52 @@ const ICON_DATA_URL =
 
 const NOTIF_ID = "vaultkey_save";
 
-async function openPopup(urlPath) {
-  const url = chrome.runtime.getURL(urlPath);
-  await chrome.windows.create({
-    url,
-    type: "popup",
-    width: 420,
-    height: 680
+function domainLookupKeys(hostname) {
+  const h = String(hostname || "")
+    .trim()
+    .toLowerCase();
+  if (!h) return [];
+  const keys = [h];
+  if (h.startsWith("www.")) keys.push(h.slice(4));
+  else keys.push(`www.${h}`);
+  return keys;
+}
+
+function pickDomainMapEntry(domain, domainMap) {
+  if (!domainMap || typeof domainMap !== "object") return null;
+  for (const k of domainLookupKeys(domain)) {
+    const hit = domainMap[k];
+    if (hit && typeof hit === "object") return { matchedKey: k, ...hit };
+  }
+  return null;
+}
+
+function openExtensionPopupWindow(urlPath) {
+  const url = chrome.runtime.getURL(urlPath || "popup.html");
+  chrome.tabs.create({ url, active: true }, () => {
+    if (chrome.runtime.lastError) {
+      chrome.windows.create({
+        url,
+        type: "popup",
+        width: 420,
+        height: 680,
+        focused: true
+      });
+    }
   });
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  if (msg && typeof msg === "object" && msg.type === "OPEN_POPUP") {
+    try {
+      openExtensionPopupWindow(msg.urlPath || "popup.html");
+      sendResponse({ ok: true });
+    } catch (e) {
+      sendResponse({ ok: false, error: String(e && e.message ? e.message : e) });
+    }
+    return false;
+  }
+
   (async () => {
     if (!msg || typeof msg !== "object" || !msg.type) return;
 
@@ -41,15 +76,17 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
     if (msg.type === "CHECK_DOMAIN") {
       const domain = String(msg.domain || "");
+      console.log("[VaultKey-BG] CHECK_DOMAIN request for:", domain);
       const { domainMap } = await chrome.storage.local.get({ domainMap: {} });
-      const hit = domainMap && domainMap[domain];
-      sendResponse({ exists: Boolean(hit), id: hit ? hit.id : null });
-      return;
-    }
-
-    if (msg.type === "OPEN_POPUP") {
-      await openPopup(msg.urlPath || "popup.html");
-      sendResponse({ ok: true });
+      const hit = pickDomainMapEntry(domain, domainMap);
+      console.log("[VaultKey-BG] Found credentials for domain:", Boolean(hit));
+      sendResponse({
+        exists: Boolean(hit),
+        id: hit ? hit.id : null,
+        service: hit ? hit.service || "" : "",
+        username: hit ? hit.username || "" : "",
+        matchedKey: hit ? hit.matchedKey || "" : ""
+      });
       return;
     }
   })().catch((e) => {
@@ -59,12 +96,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
-chrome.notifications.onButtonClicked.addListener(async (id) => {
+chrome.notifications.onButtonClicked.addListener((id) => {
   if (id !== NOTIF_ID) return;
-  await openPopup("popup.html?mode=save");
+  openExtensionPopupWindow("popup.html?mode=save");
 });
 
-chrome.notifications.onClicked.addListener(async (id) => {
+chrome.notifications.onClicked.addListener((id) => {
   if (id !== NOTIF_ID) return;
-  await openPopup("popup.html?mode=save");
+  openExtensionPopupWindow("popup.html?mode=save");
 });
