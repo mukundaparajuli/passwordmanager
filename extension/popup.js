@@ -1,4 +1,5 @@
 import { VaultKeySerial } from "./serial.js";
+import Icons from "./icons.js";
 
 const el = (id) => document.getElementById(id);
 
@@ -14,7 +15,8 @@ const state = {
   editTotpStatus: "",
   totpTimer: null,
   totpPending: false,
-  totpDisplay: { code: "------", meta: "Open TOTP to load a code.", error: "" }
+  totpDisplay: { code: "------", meta: "Open TOTP to load a code.", error: "" },
+  openMenuId: null
 };
 
 function clearTotpTimer() {
@@ -177,6 +179,16 @@ async function refresh() {
   }
   await chrome.storage.local.set({ domainMap });
 
+  // Notify all tabs that domainMap was updated so content scripts can re-check
+  const tabs = await chrome.tabs.query({});
+  for (const tab of tabs) {
+    try {
+      chrome.tabs.sendMessage(tab.id, { type: "DOMAIN_MAP_UPDATED" });
+    } catch (e) {
+      // Tab might not have content script loaded, ignore
+    }
+  }
+
   await updateDomainIndicator();
 }
 
@@ -224,61 +236,139 @@ function renderList() {
     const totpOpen = state.activeTotpId === c.id;
     const editOpen = state.editTotpId === c.id;
     const metaClass = state.totpDisplay.error ? "totp-meta totp-error" : "totp-meta";
+    const menuOpen = state.openMenuId === c.id;
     const item = document.createElement("div");
     item.className = "item";
     item.dataset.id = String(c.id);
-    item.innerHTML = `
-      <div class="row" style="justify-content: space-between">
-        <div>
-          <div class="svc">${escapeHtml(c.service || "(unnamed)")}</div>
-          <div class="url">${escapeHtml(c.url || "")}</div>
-        </div>
-        <div class="badge">${c.id}</div>
-      </div>
-      <div class="muted" style="margin-top:6px">User: <span style="font-family: var(--mono)">${escapeHtml(c.username || "-")}</span></div>
-      <div class="row item-actions">
-        <button data-act="select" class="primary">Select</button>
-        <button data-act="totp">${totpOpen ? "Hide TOTP" : "TOTP"}</button>
-        <button data-act="edit-totp">${c.has_totp ? (editOpen ? "Cancel TOTP" : "Replace TOTP") : (editOpen ? "Cancel TOTP" : "Add TOTP")}</button>
-      </div>
-      ${editOpen ? `
-        <div class="totp-panel" data-totp-edit-panel>
-          <div class="totp-meta">Enter a new Base32 secret. Save blank to remove the stored TOTP secret.</div>
-          <div class="row" style="margin-top: 8px">
-            <input data-totp-input type="text" placeholder="BASE32SECRET" style="flex: 1" />
-          </div>
-          <div class="row" style="margin-top: 8px">
-            <button data-act="save-totp" class="primary">Save TOTP</button>
-            <button data-act="cancel-totp-edit">Cancel</button>
-          </div>
-          <div class="totp-meta${state.editTotpStatus ? "" : " hidden"}" data-totp-edit-status>${escapeHtml(state.editTotpStatus || "")}</div>
-        </div>
-      ` : ""}
-      ${totpOpen ? `
-        <div class="totp-panel" data-totp-panel>
-          <div class="totp-code" data-code>${escapeHtml(state.totpDisplay.code || "------")}</div>
-          <div class="${metaClass}" data-meta>${escapeHtml(state.totpDisplay.meta || "Open TOTP to load a code.")}</div>
-        </div>
-      ` : ""}
+    
+    // Main item content with minimalistic design
+    const itemHeader = document.createElement("div");
+    itemHeader.className = "item-header";
+    
+    const itemInfo = document.createElement("div");
+    itemInfo.className = "item-info";
+    itemInfo.innerHTML = `
+      <div class="svc">${escapeHtml(c.service || "(unnamed)")}</div>
+      <div class="url">${escapeHtml(c.url || "")}</div>
     `;
-    item.querySelector('[data-act="select"]').addEventListener("click", async (e) => {
+    itemHeader.appendChild(itemInfo);
+    
+    // Menu dropdown (hidden by default)
+    const menuDropdown = document.createElement("div");
+    menuDropdown.className = "menu-dropdown";
+    if (!menuOpen) menuDropdown.style.display = "none";
+    
+    const totpMenuItem = document.createElement("button");
+    totpMenuItem.className = "menu-item";
+    totpMenuItem.setAttribute("data-act", "totp");
+    totpMenuItem.textContent = totpOpen ? "Hide TOTP" : "Show TOTP";
+    menuDropdown.appendChild(totpMenuItem);
+    
+    const addTotpMenuItem = document.createElement("button");
+    addTotpMenuItem.className = "menu-item";
+    addTotpMenuItem.setAttribute("data-act", "edit-totp");
+    addTotpMenuItem.textContent = c.has_totp ? (editOpen ? "Cancel TOTP" : "Replace TOTP") : (editOpen ? "Cancel TOTP" : "Add TOTP");
+    menuDropdown.appendChild(addTotpMenuItem);
+
+    const menuContainer = document.createElement("div");
+    menuContainer.className = "menu-container";
+    
+    const menuButton = document.createElement("button");
+    menuButton.className = "menu-button";
+    menuButton.setAttribute("data-act", "toggle-menu");
+    menuButton.setAttribute("title", "More options");
+    menuButton.setAttribute("aria-label", "More options");
+    
+    // Menu icon using utility
+    const menuIcon = Icons.createIconSync("menu", {
+      width: "20",
+      height: "20",
+      style: "pointer-events: none;"
+    });
+    
+    if (menuIcon) menuButton.appendChild(menuIcon);
+    menuContainer.appendChild(menuButton);
+    menuContainer.appendChild(menuDropdown);
+    
+    itemHeader.appendChild(menuContainer);
+    item.appendChild(itemHeader);
+
+    // Select button as primary action
+    const selectBtn = document.createElement("button");
+    selectBtn.className = "primary";
+    selectBtn.textContent = "Select";
+    selectBtn.setAttribute("data-act", "select");
+    const selectRow = document.createElement("div");
+    selectRow.className = "row";
+    selectRow.appendChild(selectBtn);
+    item.appendChild(selectRow);
+
+    // TOTP panel
+    if (totpOpen) {
+      const totpPanel = document.createElement("div");
+      totpPanel.className = "totp-panel";
+      totpPanel.dataset.totpPanel = "";
+      totpPanel.innerHTML = `
+        <div class="totp-code" data-code>${escapeHtml(state.totpDisplay.code || "------")}</div>
+        <div class="${metaClass}" data-meta>${escapeHtml(state.totpDisplay.meta || "Open TOTP to load a code.")}</div>
+      `;
+      item.appendChild(totpPanel);
+    }
+
+    // TOTP edit panel
+    if (editOpen) {
+      const editPanel = document.createElement("div");
+      editPanel.className = "totp-panel";
+      editPanel.dataset.totpEditPanel = "";
+      editPanel.innerHTML = `
+        <div class="totp-meta">Enter a new Base32 secret. Save blank to remove the stored TOTP secret.</div>
+        <div class="row" style="margin-top: 8px">
+          <input data-totp-input type="text" placeholder="BASE32SECRET" style="flex: 1" />
+        </div>
+        <div class="row" style="margin-top: 8px">
+          <button data-act="save-totp" class="primary">Save TOTP</button>
+          <button data-act="cancel-totp-edit">Cancel</button>
+        </div>
+        <div class="totp-meta${state.editTotpStatus ? "" : " hidden"}" data-totp-edit-status>${escapeHtml(state.editTotpStatus || "")}</div>
+      `;
+      item.appendChild(editPanel);
+    }
+
+    // Attach event listeners
+    const toggleMenuBtn = itemHeader.querySelector('[data-act="toggle-menu"]');
+    toggleMenuBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      state.openMenuId = state.openMenuId === c.id ? null : c.id;
+      renderList();
+    });
+
+    const selectBtn2 = item.querySelector('[data-act="select"]');
+    selectBtn2.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
       await safeCommand({ cmd: "select", id: c.id });
       setStatus(`Selected ${c.service}. Confirm twice on the device to type.`);
     });
-    item.querySelector('[data-act="totp"]').addEventListener("click", (e) => {
+
+    const totpMenuBtn = menuDropdown.querySelector('[data-act="totp"]');
+    totpMenuBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      state.openMenuId = null;
       toggleTotp(c.id).catch((err) => {
         setStatus(String(err && err.message ? err.message : err));
       });
     });
-    item.querySelector('[data-act="edit-totp"]').addEventListener("click", (e) => {
+
+    const editTotpMenuBtn = menuDropdown.querySelector('[data-act="edit-totp"]');
+    editTotpMenuBtn.addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
+      state.openMenuId = null;
       toggleTotpEditor(c.id);
     });
+
     const saveBtn = item.querySelector('[data-act="save-totp"]');
     if (saveBtn) {
       saveBtn.addEventListener("click", (e) => {
@@ -290,6 +380,7 @@ function renderList() {
         });
       });
     }
+
     const cancelBtn = item.querySelector('[data-act="cancel-totp-edit"]');
     if (cancelBtn) {
       cancelBtn.addEventListener("click", (e) => {
@@ -299,6 +390,7 @@ function renderList() {
         renderList();
       });
     }
+
     list.appendChild(item);
   }
 }
@@ -504,6 +596,15 @@ setInterval(async () => {
 parseQuery();
 await loadSettings();
 el("search").addEventListener("input", renderList);
+
+// Close menu when clicking outside
+document.addEventListener("click", (e) => {
+  if (state.openMenuId != null && !e.target.closest(".menu-button") && !e.target.closest(".menu-dropdown")) {
+    state.openMenuId = null;
+    renderList();
+  }
+});
+
 el("btn-connect").addEventListener("click", () => connect().catch(e => setStatus(String(e && e.message ? e.message : e))));
 el("btn-disconnect").addEventListener("click", () => disconnect().catch(e => setStatus(String(e && e.message ? e.message : e))));
 el("btn-unlock").addEventListener("click", () => unlock().catch(e => setStatus(String(e && e.message ? e.message : e))));

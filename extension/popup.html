@@ -174,6 +174,79 @@
         letter-spacing: 0.04em;
         text-transform: uppercase;
       }
+      .item-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 8px;
+        position: relative;
+      }
+      .item-info {
+        flex: 1;
+      }
+      .menu-button {
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        color: var(--muted);
+        padding: 4px;
+        position: relative;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: color 0.2s ease;
+      }
+      .menu-button:hover {
+        color: var(--text);
+      }
+      .menu-button svg {
+        width: 20px;
+        height: 20px;
+      }
+      .menu-container {
+        position: relative;
+        display: flex;
+        align-items: center;
+        margin-left: 8px;
+        flex-shrink: 0;
+      }
+      .menu-dropdown {
+        position: absolute;
+        top: 24px;
+        right: 0;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        min-width: 180px;
+        box-shadow: 0 8px 24px rgba(17, 24, 39, 0.12);
+        z-index: 1000;
+        overflow: hidden;
+      }
+      .menu-item {
+        display: block;
+        width: 100%;
+        padding: 10px 12px;
+        border: none;
+        background: transparent;
+        color: var(--text);
+        text-align: left;
+        cursor: pointer;
+        font-size: 13px;
+        border-bottom: 1px solid var(--border);
+      }
+      .menu-item:last-child {
+        border-bottom: none;
+      }
+      .menu-item:hover {
+        background: #f5f4f0;
+      }
+      .menu-item.danger {
+        color: #8c4e4e;
+      }
+      .menu-item.danger:hover {
+        background: var(--danger);
+      }
     </style>
   </head>
   <body>
@@ -289,7 +362,6 @@
         </div>
 
         <div class="hr"></div>
-        <div class="muted">Select sends the entry to the device. TOTP shows a live 6-digit code when a secret is stored.</div>
         <div id="list" class="list"></div>
       </div>
 
