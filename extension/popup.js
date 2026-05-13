@@ -469,6 +469,12 @@ function renderList() {
     menuDropdown.className = "menu-dropdown";
     if (!menuOpen) menuDropdown.style.display = "none";
     
+    const selectMenuItem = document.createElement("button");
+    selectMenuItem.className = "menu-item";
+    selectMenuItem.setAttribute("data-act", "select");
+    selectMenuItem.textContent = isAutofillMatch ? "Autofill" : "Select";
+    menuDropdown.appendChild(selectMenuItem);
+    
     const totpMenuItem = document.createElement("button");
     totpMenuItem.className = "menu-item";
     totpMenuItem.setAttribute("data-act", "totp");
@@ -490,7 +496,7 @@ function renderList() {
     menuButton.setAttribute("title", "More options");
     menuButton.setAttribute("aria-label", "More options");
     
-    // Menu icon using utility
+    // Menu icon - try to use icon utility, fallback to SVG
     let menuIcon = null;
     try {
       if (window.Icons && window.Icons.createIconSync) {
@@ -503,22 +509,43 @@ function renderList() {
     } catch (e) {
       console.error("[VaultKey-Popup] Failed to create menu icon:", e);
     }
+    
+    // If icon creation failed, use SVG fallback with vertical dots
+    if (!menuIcon) {
+      menuIcon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      menuIcon.setAttribute("width", "20");
+      menuIcon.setAttribute("height", "20");
+      menuIcon.setAttribute("viewBox", "0 0 20 20");
+      menuIcon.setAttribute("fill", "currentColor");
+      menuIcon.style.pointerEvents = "none";
+      
+      // Create three dots vertically
+      const circle1 = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle1.setAttribute("cx", "10");
+      circle1.setAttribute("cy", "4");
+      circle1.setAttribute("r", "2");
+      
+      const circle2 = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle2.setAttribute("cx", "10");
+      circle2.setAttribute("cy", "10");
+      circle2.setAttribute("r", "2");
+      
+      const circle3 = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle3.setAttribute("cx", "10");
+      circle3.setAttribute("cy", "16");
+      circle3.setAttribute("r", "2");
+      
+      menuIcon.appendChild(circle1);
+      menuIcon.appendChild(circle2);
+      menuIcon.appendChild(circle3);
+    }
+    
     if (menuIcon) menuButton.appendChild(menuIcon);
     menuContainer.appendChild(menuButton);
     menuContainer.appendChild(menuDropdown);
     
     itemHeader.appendChild(menuContainer);
     item.appendChild(itemHeader);
-
-    // Select button as primary action
-    const selectBtn = document.createElement("button");
-    selectBtn.className = "primary";
-    selectBtn.textContent = isAutofillMatch ? "Autofill" : "Select";
-    selectBtn.setAttribute("data-act", "select");
-    const selectRow = document.createElement("div");
-    selectRow.className = "row";
-    selectRow.appendChild(selectBtn);
-    item.appendChild(selectRow);
 
     // TOTP panel
     if (totpOpen) {
@@ -560,10 +587,11 @@ function renderList() {
       renderList();
     });
 
-    const selectBtn2 = item.querySelector('[data-act="select"]');
-    selectBtn2.addEventListener("click", async (e) => {
+    const selectMenuBtn = menuDropdown.querySelector('[data-act="select"]');
+    selectMenuBtn.addEventListener("click", async (e) => {
       e.preventDefault();
       e.stopPropagation();
+      state.openMenuId = null;
       await safeCommand({ cmd: "select", id: c.id });
       setStatus(`Selected ${c.service}. Confirm twice on the device to type.`);
     });
