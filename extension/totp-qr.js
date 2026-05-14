@@ -94,35 +94,197 @@ function reparseFromInputs() {
 }
 
 async function blobToImageData(blob) {
+  const scale = 4;
+
+  // SVG handling
+  if (blob.type === "image/svg+xml") {
+    const svgText = await blob.text();
+
+    const svgBlob = new Blob([svgText], {
+      type: "image/svg+xml"
+    });
+
+    const url = URL.createObjectURL(svgBlob);
+
+    try {
+      const img = new Image();
+
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = url;
+      });
+
+      const width = img.naturalWidth || img.width || 512;
+      const height = img.naturalHeight || img.height || 512;
+
+      const canvas = document.createElement("canvas");
+
+      canvas.width = width * scale;
+      canvas.height = height * scale;
+
+      const ctx = canvas.getContext("2d", {
+        willReadFrequently: true
+      });
+
+      // White background helps dark mode SVG QR codes
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.imageSmoothingEnabled = false;
+
+      ctx.drawImage(
+        img,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+
+      return ctx.getImageData(
+        0,
+        0,
+        canvas.width,
+        canvas.height
+      );
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  // Normal PNG/JPEG/etc
   const bmp = await createImageBitmap(blob);
-  const canvas = document.createElement("canvas");
-  canvas.width = bmp.width;
-  canvas.height = bmp.height;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  ctx.drawImage(bmp, 0, 0);
-  bmp.close();
-  return ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  try {
+    const canvas = document.createElement("canvas");
+
+    canvas.width = bmp.width * scale;
+    canvas.height = bmp.height * scale;
+
+    const ctx = canvas.getContext("2d", {
+      willReadFrequently: true
+    });
+
+    // White background helps inverted QR codes
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.imageSmoothingEnabled = false;
+
+    ctx.drawImage(
+      bmp,
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+
+    return ctx.getImageData(
+      0,
+      0,
+      canvas.width,
+      canvas.height
+    );
+  } finally {
+    bmp.close();
+  }
 }
 
 async function decodeQrFromDataUrl(dataUrl) {
-  const r = await fetch(dataUrl);
-  const blob = await r.blob();
-  if ("BarcodeDetector" in window) {
-    try {
-      const d = new BarcodeDetector({ formats: ["qr_code"] });
-      const bmp = await createImageBitmap(blob);
-      const codes = await d.detect(bmp);
-      bmp.close();
-      if (codes && codes.length && codes[0].rawValue) return codes[0].rawValue;
-    } catch (_) {}
+  try {
+    const response = await fetch(dataUrl);
+
+    const blob = await response.blob();
+
+    console.log("QR blob type:", blob.type);
+
+    // Try native BarcodeDetector first
+    if ("BarcodeDetector" in window) {
+      try {
+        let detectBlob = blob;
+
+        // SVGs need rasterization first
+        if (blob.type === "image/svg+xml") {
+          const imageData = await blobToImageData(blob);
+
+          const canvas = document.createElement("canvas");
+
+          canvas.width = imageData.width;
+          canvas.height = imageData.height;
+
+          const ctx = canvas.getContext("2d");
+
+          ctx.putImageData(imageData, 0, 0);
+
+          const rasterBlob = await new Promise((resolve) => {
+            canvas.toBlob(resolve, "image/png");
+          });
+
+          detectBlob = rasterBlob;
+        }
+
+        const detector = new BarcodeDetector({
+          formats: ["qr_code"]
+        });
+
+        const bitmap = await createImageBitmap(detectBlob);
+
+        try {
+          const codes = await detector.detect(bitmap);
+
+          if (
+            codes &&
+            codes.length > 0 &&
+            codes[0].rawValue
+          ) {
+            console.log("BarcodeDetector success");
+
+            return codes[0].rawValue;
+          }
+        } finally {
+          bitmap.close();
+        }
+      } catch (err) {
+        console.warn("BarcodeDetector failed:", err);
+      }
+    }
+
+    // Fallback to jsQR
+    const jsQRFn = globalThis.jsQR;
+
+    if (typeof jsQRFn === "function") {
+      const imageData = await blobToImageData(blob);
+
+      console.log(
+        "Trying jsQR:",
+        imageData.width,
+        imageData.height
+      );
+
+      const result = jsQRFn(
+        imageData.data,
+        imageData.width,
+        imageData.height,
+        {
+          inversionAttempts: "attemptBoth"
+        }
+      );
+
+      if (result?.data) {
+        console.log("jsQR success");
+
+        return result.data;
+      }
+    }
+
+    console.warn("QR decode failed");
+
+    return null;
+  } catch (err) {
+    console.error("decodeQrFromDataUrl error:", err);
+
+    return null;
   }
-  const jsQR = globalThis.jsQR;
-  if (typeof jsQR === "function") {
-    const imageData = await blobToImageData(blob);
-    const res = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: "attemptBoth" });
-    if (res && res.data) return res.data;
-  }
-  return null;
 }
 
 function populateCredSelect() {
@@ -216,19 +378,25 @@ async function showImportView() {
   }
 
   const manualPre = el("manual-paste").value.trim();
-  let source = manualPre || lastDecodedRaw;
-  if (!source && el("manual-tweak").value.trim()) source = el("manual-tweak").value.trim();
-
-  let parsed = parseOtpauth(source);
-  if (parsed.error && lastDecodedRaw && lastDecodedRaw !== source) {
-    parsed = parseOtpauth(lastDecodedRaw);
-  }
-  if (parsed.error && manualPre) {
-    parsed = parseOtpauth(manualPre);
-  }
-
-  if (lastDecodedRaw && !el("manual-tweak").value.trim()) {
+  const manualTweak = el("manual-tweak").value.trim();
+  
+  // Populate manual-tweak field first if QR was decoded
+  if (lastDecodedRaw && !manualTweak) {
     el("manual-tweak").value = lastDecodedRaw;
+  }
+
+  // Try sources in order of priority: manual paste → manual tweak → QR decoded
+  let source = manualPre || manualTweak || lastDecodedRaw;
+  let parsed = parseOtpauth(source);
+  
+  // If parsing failed, try alternatives
+  if (parsed.error) {
+    if (manualTweak && manualTweak !== source) {
+      parsed = parseOtpauth(manualTweak);
+    }
+    if (parsed.error && lastDecodedRaw && lastDecodedRaw !== source) {
+      parsed = parseOtpauth(lastDecodedRaw);
+    }
   }
 
   applyParsedToUi(parsed);
@@ -263,15 +431,21 @@ async function showImportView() {
 
 async function saveTotp() {
   setStatus("");
-  const id = parseInt(el("field-cred").value, 10);
-  const secretField = el("field-secret").value.trim().replace(/\s/g, "").toUpperCase();
-  const tweakRaw = el("manual-tweak").value.trim();
-  const parsed = parseOtpauth(tweakRaw || secretField);
-  const toSave = parsed.error ? secretField : parsed.secret || secretField;
-  if (!id || !toSave) {
+
+  const idStr = el("field-cred").value;
+  const id = parseInt(idStr, 10);
+  const toSave = el("field-secret").value.trim().replace(/\s/g, "").toUpperCase();
+
+  if (idStr === "" || isNaN(id) || !toSave) {
     setStatus("Pick a credential and ensure the secret is not empty.");
     return;
   }
+
+  if (!/^[A-Z2-7]+=*$/.test(toSave) || toSave.length < 8) {
+    setStatus("Secret doesn't look like valid Base32. Check the secret field.");
+    return;
+  }
+
   try {
     await safeCommand({ cmd: "update_totp", id, totp_secret: toSave });
     await refreshDomainMapFromCreds();
