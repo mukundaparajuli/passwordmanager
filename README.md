@@ -1,6 +1,6 @@
 # Password Manager
 
-This project is a hardware-assisted password manager built around an ESP32-S3 and a Chromium browser extension. The device stores encrypted credentials and optional 2FA/TOTP secrets, the extension manages them over Web Serial, and the device can type the selected login back into the host as a USB keyboard.
+This project is a hardware-assisted password manager built around an ESP32-S3 and a Chromium browser extension. The device stores encrypted credentials, the extension manages them over Web Serial, and the device can type the selected login back into the host as a USB keyboard.
 
 ## Overview
 
@@ -15,7 +15,6 @@ High-level flow:
 2. You unlock the vault with a 4 to 8 digit PIN.
 3. Credentials are added, listed, and managed through JSON commands over serial.
 4. When you select a credential, the ESP32 types it through native USB HID.
-5. If a saved account uses app-based 2FA, the device can also generate the current 6-digit TOTP token on demand.
 
 ## Architecture Diagram
 
@@ -64,12 +63,11 @@ The same USB connection is used for two different jobs:
 - Auto-lock after inactivity
 - Failed PIN attempt tracking with exponential lockout
 - Up to 50 stored credentials
-- 2FA support through encrypted TOTP secret storage and 6-digit token generation
 - USB HID typing modes:
   - password only
   - username + `TAB` + password
   - username + `TAB` + password + `ENTER`
-- TOTP secret storage and 6-digit TOTP generation
+- TOTP secret storage and 6-digiProjectt TOTP generation
 - Browser-side login capture from submitted forms
 - Domain-aware autofill suggestions in password fields
 - TOTP QR import from page images or pasted `otpauth://` URLs
@@ -200,8 +198,6 @@ Stored fields per credential:
 - `totp_secret`
 - HID typing mode flags
 
-If an account uses authenticator-app 2FA, you can save its TOTP secret together with the login so the current token can be generated later from the extension.
-
 ### 3. Select and type credentials
 
 There are two ways to choose a credential:
@@ -229,29 +225,15 @@ Typical flow:
 
 The extension also listens for submitted login forms and can prompt you to save newly entered credentials.
 
-### 5. 2FA / TOTP workflow
+### 5. TOTP workflow
 
-TOTP secrets can be attached to a credential so the device can generate the current 6-digit 2FA token when you need it.
+TOTP secrets can be attached to a credential and later viewed from the extension.
 
 Supported methods:
 
 - Enter a Base32 secret manually
 - Paste an `otpauth://totp/...` URL
 - Right-click a QR image on a web page and choose `Save QR as TOTP secret…`
-
-Typical 2FA flow:
-
-1. Save the login as usual
-2. Attach the site's TOTP secret to that same credential
-3. Unlock the device from the extension
-4. Open the TOTP view for that credential
-5. Read the current 6-digit token and use it in the site's 2FA prompt before it expires
-
-How it works:
-
-- The TOTP secret is stored encrypted on the device along with the credential.
-- The 6-digit token is generated on demand by the device.
-- Tokens refresh every 30 seconds.
 
 Important:
 
